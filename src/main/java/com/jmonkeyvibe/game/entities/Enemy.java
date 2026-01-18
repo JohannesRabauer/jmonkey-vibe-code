@@ -2,12 +2,14 @@ package com.jmonkeyvibe.game.entities;
 
 import com.jme3.asset.AssetManager;
 import com.jme3.material.Material;
+import com.jme3.material.RenderState;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.FastMath;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.scene.shape.Quad;
+import com.jme3.texture.Texture;
 
 /**
  * Enemy entity for combat encounters
@@ -32,15 +34,21 @@ public class Enemy {
         
         this.spatial = new Node("Enemy_" + type.name());
         
-        // Create enemy sprite
+        // Create enemy sprite with texture
         Quad quad = new Quad(type.getSize(), type.getSize());
         Geometry enemyGeom = new Geometry("EnemyGeometry", quad);
         
-        Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-        mat.setColor("Color", type.getColor());
-        enemyGeom.setMaterial(mat);
+        Texture enemyTexture = assetManager.loadTexture("Textures/enemy.png");
+        enemyTexture.setWrap(Texture.WrapMode.Repeat);
         
-        // Center and rotate for top-down view
+        Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        mat.setTexture("ColorMap", enemyTexture);
+        mat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
+        enemyGeom.setMaterial(mat);
+        enemyGeom.setQueueBucket(com.jme3.renderer.queue.RenderQueue.Bucket.Transparent);
+        
+        // Flip texture and center quad for top-down view
+        quad.scaleTextureCoordinates(new com.jme3.math.Vector2f(1, -1));
         enemyGeom.setLocalTranslation(-type.getSize() / 2, 0, -type.getSize() / 2); // Center the quad
         enemyGeom.rotate(-FastMath.HALF_PI, 0, 0); // Rotate to face camera
         
