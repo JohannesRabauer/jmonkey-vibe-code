@@ -1,0 +1,199 @@
+name: Build and Package Game
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ created ]
+
+jobs:
+  build-jar:
+    name: Build JAR (All Platforms)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+      
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-jar
+          path: target/*.jar
+          retention-days: 30
+
+  build-windows-installer:
+    name: Build Windows Installer
+    needs: build-jar
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+      
+      - name: Create jpackage input directory
+        run: |
+          mkdir -p jpackage-output
+          cp target/jpackage-input/*.jar jpackage-output/ 2>$null || true
+          cp -r target/jpackage-input/lib jpackage-output/ 2>$null || true
+        shell: pwsh
+      
+      - name: Build Windows EXE with jpackage
+        run: |
+          jpackage `
+            --input target/jpackage-input `
+            --name "JMonkeyVibeGame" `
+            --main-jar jmonkey-vibe-game-1.0.0.jar `
+            --main-class com.jmonkeyvibe.game.Main `
+            --type exe `
+            --dest jpackage-output `
+            --app-version 1.0.0 `
+            --vendor "JMonkey Vibe" `
+            --description "A 2D top-down RPG with AI-powered NPCs" `
+            --java-options "-Xmx2g" `
+            --java-options "-Xms512m" `
+            --win-menu `
+            --win-shortcut `
+            --win-dir-chooser
+        shell: pwsh
+        continue-on-error: true
+      
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: jpackage-output/*.exe
+          retention-days: 30
+        if: success()
+
+  build-linux-package:
+    name: Build Linux Package
+    needs: build-jar
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+      
+      - name: Build Linux DEB with jpackage
+        run: |
+          jpackage \
+            --input target/jpackage-input \
+            --name jmonkey-vibe-game \
+            --main-jar jmonkey-vibe-game-1.0.0.jar \
+            --main-class com.jmonkeyvibe.game.Main \
+            --type deb \
+            --dest jpackage-output \
+            --app-version 1.0.0 \
+            --vendor "JMonkey Vibe" \
+            --description "A 2D top-down RPG with AI-powered NPCs" \
+            --java-options "-Xmx2g" \
+            --java-options "-Xms512m" \
+            --linux-shortcut
+        continue-on-error: true
+      
+      - name: Upload Linux Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: jpackage-output/*.deb
+          retention-days: 30
+        if: success()
+
+  build-macos-package:
+    name: Build macOS Package
+    needs: build-jar
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+      
+      - name: Build macOS DMG with jpackage
+        run: |
+          jpackage \
+            --input target/jpackage-input \
+            --name "JMonkey Vibe Game" \
+            --main-jar jmonkey-vibe-game-1.0.0.jar \
+            --main-class com.jmonkeyvibe.game.Main \
+            --type dmg \
+            --dest jpackage-output \
+            --app-version 1.0.0 \
+            --vendor "JMonkey Vibe" \
+            --description "A 2D top-down RPG with AI-powered NPCs" \
+            --java-options "-Xmx2g" \
+            --java-options "-Xms512m"
+        continue-on-error: true
+      
+      - name: Upload macOS Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: jpackage-output/*.dmg
+          retention-days: 30
+        if: success()
+
+  create-release:
+    name: Create Release
+    if: github.event_name == 'release'
+    needs: [build-jar, build-windows-installer, build-linux-package, build-macos-package]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/**/*.jar
+            artifacts/**/*.exe
+            artifacts/**/*.deb
+            artifacts/**/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
