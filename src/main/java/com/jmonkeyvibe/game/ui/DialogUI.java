@@ -42,6 +42,9 @@ public class DialogUI {
     private static final int DIALOG_HEIGHT = 200;
     private static final int CHOICE_HEIGHT = 40;
     private static final int PADDING = 10;
+    private static final int SPACING = 5;
+    private static final int MARGIN_TOP = 20;
+    private static final int INPUT_HEIGHT = 30;
     
     public DialogUI(SimpleApplication app) {
         this.app = app;
@@ -60,6 +63,10 @@ public class DialogUI {
         int screenWidth = app.getCamera().getWidth();
         int screenHeight = app.getCamera().getHeight();
         
+        // Calculate base positions from top
+        int dialogX = (screenWidth - DIALOG_WIDTH) / 2;
+        int dialogY = screenHeight - MARGIN_TOP - DIALOG_HEIGHT;
+        
         // Dialog background
         Quad dialogQuad = new Quad(DIALOG_WIDTH, DIALOG_HEIGHT);
         dialogBackground = new Geometry("DialogBackground", dialogQuad);
@@ -67,98 +74,90 @@ public class DialogUI {
         dialogMat.setColor("Color", new ColorRGBA(0.1f, 0.1f, 0.15f, 0.9f));
         dialogMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
         dialogBackground.setMaterial(dialogMat);
-        dialogBackground.setLocalTranslation(
-            (screenWidth - DIALOG_WIDTH) / 2,
-            screenHeight - DIALOG_HEIGHT - 20,
-            0
-        );
+        dialogBackground.setLocalTranslation(dialogX, dialogY, 0);
         
-        // NPC name
+        // NPC name - positioned at top of dialog box
         npcNameText = new BitmapText(font);
         npcNameText.setSize(font.getCharSet().getRenderedSize() * 1.2f);
         npcNameText.setColor(ColorRGBA.Yellow);
         npcNameText.setLocalTranslation(
-            (screenWidth - DIALOG_WIDTH) / 2 + PADDING,
-            screenHeight - 30,
+            dialogX + PADDING,
+            dialogY + DIALOG_HEIGHT - PADDING - 5,
             1
         );
         
-        // Dialog text
+        // Dialog text - below NPC name
         dialogText = new BitmapText(font);
         dialogText.setSize(font.getCharSet().getRenderedSize());
         dialogText.setColor(ColorRGBA.White);
         dialogText.setLocalTranslation(
-            (screenWidth - DIALOG_WIDTH) / 2 + PADDING,
-            screenHeight - 60,
+            dialogX + PADDING,
+            dialogY + DIALOG_HEIGHT - PADDING - 35,
             1
         );
-        dialogText.setBox(new com.jme3.font.Rectangle(0, 0, DIALOG_WIDTH - 2 * PADDING, DIALOG_HEIGHT - 80));
+        dialogText.setBox(new com.jme3.font.Rectangle(0, 0, DIALOG_WIDTH - 2 * PADDING, 140));
         dialogText.setLineWrapMode(com.jme3.font.LineWrapMode.Word);
         
-        // Prompt text
+        // Prompt text - below dialog box
+        int promptY = dialogY - SPACING - 15;
         promptText = new BitmapText(font);
         promptText.setSize(font.getCharSet().getRenderedSize() * 0.9f);
         promptText.setColor(ColorRGBA.LightGray);
         promptText.setText("Press 1-3 to select response, or T to type custom response");
-        promptText.setLocalTranslation(
-            (screenWidth - DIALOG_WIDTH) / 2 + PADDING,
-            screenHeight - DIALOG_HEIGHT - 255,
-            1
-        );
+        promptText.setLocalTranslation(dialogX + PADDING, promptY, 1);
         
-        // Custom input background
-        Quad inputQuad = new Quad(DIALOG_WIDTH - 2 * PADDING, 30);
-        customInputBackground = new Geometry("CustomInputBg", inputQuad);
-        Material inputMat = new Material(app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
-        inputMat.setColor("Color", new ColorRGBA(0.1f, 0.3f, 0.1f, 0.9f));
-        inputMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
-        customInputBackground.setMaterial(inputMat);
-        customInputBackground.setLocalTranslation(
-            (screenWidth - DIALOG_WIDTH) / 2 + PADDING,
-            screenHeight - DIALOG_HEIGHT - 285,
-            0
-        );
-        
-        // Custom input text
-        customInputText = new BitmapText(font);
-        customInputText.setSize(font.getCharSet().getRenderedSize());
-        customInputText.setColor(ColorRGBA.White);
-        customInputText.setText("> ");
-        customInputText.setLocalTranslation(
-            (screenWidth - DIALOG_WIDTH) / 2 + PADDING + 5,
-            screenHeight - DIALOG_HEIGHT - 285 + 20,
-            1
-        );
-        
-        // Create 3 choice slots
+        // Choices - below prompt
+        int choicesStartY = promptY - SPACING - CHOICE_HEIGHT;
         for (int i = 0; i < 3; i++) {
-            // Choice background
-            Quad choiceQuad = new Quad(DIALOG_WIDTH - 2 * PADDING, CHOICE_HEIGHT);
+            int choiceY = choicesStartY - (i * (CHOICE_HEIGHT + SPACING));
+            
+            // Choice background - same width as dialog box
+            Quad choiceQuad = new Quad(DIALOG_WIDTH, CHOICE_HEIGHT);
             Geometry choiceBg = new Geometry("ChoiceBg" + i, choiceQuad);
             Material choiceMat = new Material(app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
             choiceMat.setColor("Color", new ColorRGBA(0.2f, 0.2f, 0.3f, 0.8f));
             choiceMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
             choiceBg.setMaterial(choiceMat);
-            choiceBg.setLocalTranslation(
-                (screenWidth - DIALOG_WIDTH) / 2 + PADDING,
-                screenHeight - DIALOG_HEIGHT - 50 - (i * (CHOICE_HEIGHT + 5)),
-                0
-            );
+            choiceBg.setLocalTranslation(dialogX, choiceY, 0);
             choiceBackgrounds.add(choiceBg);
             
-            // Choice text
+            // Choice text - with padding inside the box
             BitmapText choiceText = new BitmapText(font);
             choiceText.setSize(font.getCharSet().getRenderedSize());
             choiceText.setColor(ColorRGBA.White);
             choiceText.setLocalTranslation(
-                (screenWidth - DIALOG_WIDTH) / 2 + PADDING + 5,
-                screenHeight - DIALOG_HEIGHT - 50 - (i * (CHOICE_HEIGHT + 5)) + CHOICE_HEIGHT - 10,
+                dialogX + PADDING,
+                choiceY + (CHOICE_HEIGHT / 2) + 5,
                 1
             );
-            choiceText.setBox(new com.jme3.font.Rectangle(0, 0, DIALOG_WIDTH - 2 * PADDING - 10, CHOICE_HEIGHT));
+            choiceText.setBox(new com.jme3.font.Rectangle(0, 0, DIALOG_WIDTH - 2 * PADDING, CHOICE_HEIGHT));
             choiceText.setLineWrapMode(com.jme3.font.LineWrapMode.Word);
             choiceTexts.add(choiceText);
         }
+        
+        // Custom input - below all choices
+        int lastChoiceY = choicesStartY - (2 * (CHOICE_HEIGHT + SPACING));
+        int inputY = lastChoiceY - SPACING * 2 - INPUT_HEIGHT;
+        
+        // Custom input background - same width as dialog box
+        Quad inputQuad = new Quad(DIALOG_WIDTH, INPUT_HEIGHT);
+        customInputBackground = new Geometry("CustomInputBg", inputQuad);
+        Material inputMat = new Material(app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
+        inputMat.setColor("Color", new ColorRGBA(0.1f, 0.3f, 0.1f, 0.9f));
+        inputMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
+        customInputBackground.setMaterial(inputMat);
+        customInputBackground.setLocalTranslation(dialogX, inputY, 0);
+        
+        // Custom input text - with padding inside the box
+        customInputText = new BitmapText(font);
+        customInputText.setSize(font.getCharSet().getRenderedSize());
+        customInputText.setColor(ColorRGBA.White);
+        customInputText.setText("> ");
+        customInputText.setLocalTranslation(
+            dialogX + PADDING,
+            inputY + (INPUT_HEIGHT / 2) + 5,
+            1
+        );
         
         // Add to dialog node (but don't attach yet)
         dialogNode.attachChild(dialogBackground);
