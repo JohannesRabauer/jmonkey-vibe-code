@@ -16,6 +16,10 @@ import com.jme3.scene.shape.Quad;
 import com.jmonkeyvibe.game.world.WorldGenerator;
 import com.jmonkeyvibe.game.entities.Player;
 import com.jmonkeyvibe.game.entities.NPC;
+import com.jmonkeyvibe.game.ai.NPCConversationManager;
+import com.jmonkeyvibe.game.ui.DialogUI;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Game state for exploration mode - top-down overworld navigation
@@ -26,19 +30,31 @@ public class ExplorationState extends BaseAppState implements ActionListener {
     private Node worldNode;
     private Player player;
     private WorldGenerator worldGenerator;
+    private NPCConversationManager conversationManager;
+    private List<NPC> npcs;
+    private DialogUI dialogUI;
     
     private boolean moveForward = false;
     private boolean moveBackward = false;
     private boolean moveLeft = false;
     private boolean moveRight = false;
     
+    private NPC currentTalkingNPC = null;
+    private String lastNPCMessage = "";
+    private boolean isTypingCustomResponse = false;
+    private StringBuilder customResponseBuffer = new StringBuilder();
+    
     private static final float MOVE_SPEED = 5.0f;
+    private static final float INTERACTION_DISTANCE = 3.0f;
 
     @Override
     protected void initialize(Application app) {
         this.app = (SimpleApplication) app;
         this.worldNode = new Node("World");
         this.worldGenerator = new WorldGenerator(this.app.getAssetManager());
+        this.npcs = new ArrayList<>();
+        this.conversationManager = new NPCConversationManager();
+        this.dialogUI = new DialogUI(this.app);
         
         System.out.println("Initializing exploration state...");
         
@@ -111,9 +127,32 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         app.getInputManager().addMapping("MoveLeft", new KeyTrigger(KeyInput.KEY_A));
         app.getInputManager().addMapping("MoveRight", new KeyTrigger(KeyInput.KEY_D));
         app.getInputManager().addMapping("Interact", new KeyTrigger(KeyInput.KEY_E));
+        app.getInputManager().addMapping("Choice1", new KeyTrigger(KeyInput.KEY_1));
+        app.getInputManager().addMapping("Choice2", new KeyTrigger(KeyInput.KEY_2));
+        app.getInputManager().addMapping("Choice3", new KeyTrigger(KeyInput.KEY_3));
+        app.getInputManager().addMapping("TypeCustom", new KeyTrigger(KeyInput.KEY_T));
+        app.getInputManager().addMapping("Escape", new KeyTrigger(KeyInput.KEY_ESCAPE));
         
         app.getInputManager().addListener(this, 
-            "MoveForward", "MoveBackward", "MoveLeft", "MoveRight", "Interact");
+            "MoveForward", "MoveBackward", "MoveLeft", "MoveRight", "Interact",
+            "Choice1", "Choice2", "Choice3", "TypeCustom", "Escape");
+        
+        // Add raw input listener for text typing
+        app.getInputManager().addRawInputListener(new com.jme3.input.RawInputListener() {
+            @Override
+            public void onKeyEvent(com.jme3.input.event.KeyInputEvent evt) {
+                if (isTypingCustomResponse && evt.isPressed()) {
+                    handleTextInput(evt);
+                }
+            }
+            @Override public void beginInput() {}
+            @Override public void endInput() {}
+            @Override public void onMouseMotionEvent(com.jme3.input.event.MouseMotionEvent evt) {}
+            @Override public void onMouseButtonEvent(com.jme3.input.event.MouseButtonEvent evt) {}
+            @Override public void onJoyAxisEvent(com.jme3.input.event.JoyAxisEvent evt) {}
+            @Override public void onJoyButtonEvent(com.jme3.input.event.JoyButtonEvent evt) {}
+            @Override public void onTouchEvent(com.jme3.input.event.TouchEvent evt) {}
+        });
     }
 
     private void clearInput() {
@@ -122,11 +161,21 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         app.getInputManager().deleteMapping("MoveLeft");
         app.getInputManager().deleteMapping("MoveRight");
         app.getInputManager().deleteMapping("Interact");
+        app.getInputManager().deleteMapping("Choice1");
+        app.getInputManager().deleteMapping("Choice2");
+        app.getInputManager().deleteMapping("Choice3");
+        app.getInputManager().deleteMapping("TypeCustom");
+        app.getInputManager().deleteMapping("Escape");
         app.getInputManager().removeListener(this);
     }
 
     @Override
     public void onAction(String name, boolean isPressed, float tpf) {
+        // Don't process movement if typing
+        if (isTypingCustomResponse && !name.equals("Escape")) {
+            return;
+        }
+        
         switch (name) {
             case "MoveForward":
                 moveForward = isPressed;
@@ -145,17 +194,224 @@ public class ExplorationState extends BaseAppState implements ActionListener {
                     checkNPCInteraction();
                 }
                 break;
+            case "Choice1":
+                if (isPressed && dialogUI.isVisible()) {
+                    selectDialogChoice(0);
+                }
+                break;
+            case "Choice2":
+                if (isPressed && dialogUI.isVisible()) {
+                    selectDialogChoice(1);
+                }
+                break;
+            case "Choice3":
+                if (isPressed && dialogUI.isVisible()) {
+                    selectDialogChoice(2);
+                }
+                break;
+            case "TypeCustom":
+                if (isPressed && dialogUI.isVisible()) {
+                    startCustomResponse();
+                }
+                break;
+            case "Escape":
+                if (isPressed) {
+                    if (isTypingCustomResponse) {
+                        cancelCustomResponse();
+                    } else if (dialogUI.isVisible()) {
+                        closeDialog();
+                    }
+                }
+                break;
         }
     }
 
     private void checkNPCInteraction() {
-        // TODO: Implement NPC interaction detection and dialogue triggering
-        System.out.println("Checking for nearby NPCs to interact with...");
+        // If already in dialog, close it
+        if (dialogUI.isVisible()) {
+            closeDialog();
+            return;
+        }
+        
+        Vector3f playerPos = player.getPosition();
+        NPC closestNPC = null;
+        float closestDistance = Float.MAX_VALUE;
+        
+        // Find the closest NPC within interaction distance
+        for (NPC npc : npcs) {
+            float distance = playerPos.distance(npc.getPosition());
+            if (distance < INTERACTION_DISTANCE && distance < closestDistance) {
+                closestDistance = distance;
+                closestNPC = npc;
+            }
+        }
+        
+        if (closestNPC != null) {
+            final NPC npc = closestNPC;
+            currentTalkingNPC = npc;
+            
+            // Generate response options immediately
+            List<String> choices = new ArrayList<>();
+            choices.add("Tell me more...");
+            choices.add("What can you help with?");
+            choices.add("I must go now");
+            
+            // Show dialog UI with loading state
+            dialogUI.startStreamingDialog(npc.getName(), choices);
+            
+            // Start streaming conversation
+            conversationManager.startStreamingConversation(
+                npc,
+                "Hello! I'd like to talk to you.",
+                token -> {
+                    // Stream each token to the UI
+                    app.enqueue(() -> {
+                        dialogUI.appendStreamedText(token);
+                        return null;
+                    });
+                },
+                () -> {
+                    // On complete, generate proper response options
+                    app.enqueue(() -> {
+                        lastNPCMessage = ""; // Will be in conversation history
+                        List<String> properChoices = conversationManager.generateResponseOptions(npc, "greeting");
+                        // Update choices
+                        dialogUI.show(npc.getName(), dialogUI.getCurrentDialogText(), properChoices);
+                        return null;
+                    });
+                }
+            );
+            
+            System.out.println("\n=== Talking to " + npc.getName() + " ===");
+        } else {
+            System.out.println("No NPCs nearby. Move closer and press E to interact.");
+        }
+    }
+    
+    private void selectDialogChoice(int choiceIndex) {
+        dialogUI.selectChoice(choiceIndex);
+        String selectedResponse = dialogUI.getSelectedChoice();
+        
+        if (selectedResponse != null && currentTalkingNPC != null) {
+            System.out.println("Player: " + selectedResponse);
+            
+            // Clear current dialog and show loading
+            List<String> loadingChoices = new ArrayList<>();
+            loadingChoices.add("...");
+            loadingChoices.add("...");
+            loadingChoices.add("...");
+            dialogUI.startStreamingDialog(currentTalkingNPC.getName(), loadingChoices);
+            
+            // Start streaming conversation
+            conversationManager.startStreamingConversation(
+                currentTalkingNPC,
+                selectedResponse,
+                token -> {
+                    app.enqueue(() -> {
+                        dialogUI.appendStreamedText(token);
+                        return null;
+                    });
+                },
+                () -> {
+                    app.enqueue(() -> {
+                        String currentText = dialogUI.getCurrentDialogText();
+                        List<String> choices = conversationManager.generateResponseOptions(currentTalkingNPC, currentText);
+                        dialogUI.show(currentTalkingNPC.getName(), currentText, choices);
+                        return null;
+                    });
+                }
+            );
+        }
+    }
+    
+    private void startCustomResponse() {
+        isTypingCustomResponse = true;
+        customResponseBuffer.setLength(0);
+        dialogUI.setCustomInputVisible(true);
+        dialogUI.updateCustomInputText("");
+        dialogUI.showCustomInputPrompt();
+        System.out.println("\nType your custom response (press ENTER to send, ESC to cancel):");
+    }
+    
+    private void cancelCustomResponse() {
+        isTypingCustomResponse = false;
+        customResponseBuffer.setLength(0);
+        dialogUI.setCustomInputVisible(false);
+        dialogUI.showChoicePrompt();
+        System.out.println("Custom input cancelled");
+    }
+    
+    private void handleTextInput(com.jme3.input.event.KeyInputEvent evt) {
+        char ch = evt.getKeyChar();
+        int keyCode = evt.getKeyCode();
+        
+        if (keyCode == KeyInput.KEY_RETURN) {
+            // Send custom response
+            String customResponse = customResponseBuffer.toString().trim();
+            if (!customResponse.isEmpty() && currentTalkingNPC != null) {
+                System.out.println("Player: " + customResponse);
+                
+                // Clear input and hide it
+                isTypingCustomResponse = false;
+                customResponseBuffer.setLength(0);
+                dialogUI.setCustomInputVisible(false);
+                
+                // Start streaming response
+                List<String> loadingChoices = new ArrayList<>();
+                loadingChoices.add("...");
+                loadingChoices.add("...");
+                loadingChoices.add("...");
+                dialogUI.startStreamingDialog(currentTalkingNPC.getName(), loadingChoices);
+                
+                conversationManager.startStreamingConversation(
+                    currentTalkingNPC,
+                    customResponse,
+                    token -> {
+                        app.enqueue(() -> {
+                            dialogUI.appendStreamedText(token);
+                            return null;
+                        });
+                    },
+                    () -> {
+                        app.enqueue(() -> {
+                            String currentText = dialogUI.getCurrentDialogText();
+                            List<String> choices = conversationManager.generateResponseOptions(currentTalkingNPC, currentText);
+                            dialogUI.show(currentTalkingNPC.getName(), currentText, choices);
+                            dialogUI.showChoicePrompt();
+                            return null;
+                        });
+                    }
+                );
+            } else {
+                isTypingCustomResponse = false;
+                customResponseBuffer.setLength(0);
+                dialogUI.setCustomInputVisible(false);
+                dialogUI.showChoicePrompt();
+            }
+        } else if (keyCode == KeyInput.KEY_BACK && customResponseBuffer.length() > 0) {
+            // Backspace
+            customResponseBuffer.setLength(customResponseBuffer.length() - 1);
+            dialogUI.updateCustomInputText(customResponseBuffer.toString());
+        } else if (Character.isLetterOrDigit(ch) || Character.isWhitespace(ch) || "!?.,'\"()-".indexOf(ch) >= 0) {
+            // Add character
+            customResponseBuffer.append(ch);
+            dialogUI.updateCustomInputText(customResponseBuffer.toString());
+        }
+    }
+    
+    private void closeDialog() {
+        dialogUI.hide();
+        currentTalkingNPC = null;
+        lastNPCMessage = "";
+        isTypingCustomResponse = false;
+        customResponseBuffer.setLength(0);
+        System.out.println("Dialog closed");
     }
 
     private void createTestNPC(Vector3f position, String name) {
         NPC npc = new NPC(app.getAssetManager(), name);
         npc.setPosition(position);
         worldNode.attachChild(npc.getSpatial());
+        npcs.add(npc);
     }
 }

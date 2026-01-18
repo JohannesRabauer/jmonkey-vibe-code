@@ -1,8 +1,11 @@
 package com.jmonkeyvibe.game.ai;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
+import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
 
 import java.time.Duration;
 
@@ -90,5 +93,58 @@ public class AIModelFactory {
             System.err.println("AI model connection test failed: " + e.getMessage());
             return false;
         }
+    }
+    
+    /**
+     * Create a streaming chat model for real-time responses
+     */
+    public static StreamingChatLanguageModel createStreamingChatModel() {
+        System.out.println("Initializing streaming AI model with provider: " + AI_PROVIDER);
+        
+        return switch (AI_PROVIDER.toUpperCase()) {
+            case "OPENAI" -> createOpenAIStreamingModel();
+            case "OLLAMA" -> createOllamaStreamingModel();
+            default -> {
+                System.out.println("Unknown AI provider '" + AI_PROVIDER + "', defaulting to Ollama");
+                yield createOllamaStreamingModel();
+            }
+        };
+    }
+    
+    /**
+     * Create a streaming OpenAI chat model
+     */
+    private static StreamingChatLanguageModel createOpenAIStreamingModel() {
+        if (OPENAI_API_KEY == null || OPENAI_API_KEY.isEmpty()) {
+            throw new IllegalStateException(
+                "AI_PROVIDER is set to OPENAI but OPENAI_API_KEY environment variable is not set."
+            );
+        }
+        
+        var builder = OpenAiStreamingChatModel.builder()
+            .apiKey(OPENAI_API_KEY)
+            .modelName("gpt-4o-mini")
+            .temperature(0.7)
+            .timeout(Duration.ofSeconds(30))
+            .logRequests(false)
+            .logResponses(false);
+        
+        if (OPENAI_BASE_URL != null && !OPENAI_BASE_URL.isEmpty()) {
+            builder.baseUrl(OPENAI_BASE_URL);
+        }
+        
+        return builder.build();
+    }
+    
+    /**
+     * Create a streaming Ollama chat model
+     */
+    private static StreamingChatLanguageModel createOllamaStreamingModel() {
+        return OllamaStreamingChatModel.builder()
+            .baseUrl(OLLAMA_BASE_URL)
+            .modelName(OLLAMA_MODEL)
+            .temperature(0.7)
+            .timeout(Duration.ofSeconds(60))
+            .build();
     }
 }
