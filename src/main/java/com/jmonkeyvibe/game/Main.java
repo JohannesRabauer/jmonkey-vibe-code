@@ -37,6 +37,9 @@ public class Main extends SimpleApplication {
         // Disable the default fly camera for 2D gameplay
         flyCam.setEnabled(false);
         
+        // Disable default ESC key mapping (which closes the app)
+        inputManager.deleteMapping("SIMPLEAPP_Exit");
+        
         // Set up orthographic camera for 2D top-down view
         setupOrthographicCamera();
         

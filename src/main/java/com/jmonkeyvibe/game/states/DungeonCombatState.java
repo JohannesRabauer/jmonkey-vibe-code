@@ -30,7 +30,9 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
     private boolean moveRight = false;
     private boolean firing = false;
     
+    private Vector3f dungeonExitPosition;
     private static final float MOVE_SPEED = 7.0f;
+    private static final float EXIT_DISTANCE = 2.0f;
 
     @Override
     protected void initialize(Application app) {
@@ -53,6 +55,9 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         
         // Spawn some enemies
         spawnInitialEnemies();
+        
+        // Create dungeon exit portal
+        createDungeonExit();
         
         this.app.getRootNode().attachChild(dungeonNode);
         
@@ -90,16 +95,16 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         Vector3f moveDirection = new Vector3f();
         
         if (moveForward) {
-            moveDirection.addLocal(0, 0, -1);
-        }
-        if (moveBackward) {
             moveDirection.addLocal(0, 0, 1);
         }
+        if (moveBackward) {
+            moveDirection.addLocal(0, 0, -1);
+        }
         if (moveLeft) {
-            moveDirection.addLocal(-1, 0, 0);
+            moveDirection.addLocal(1, 0, 0);
         }
         if (moveRight) {
-            moveDirection.addLocal(1, 0, 0);
+            moveDirection.addLocal(-1, 0, 0);
         }
         
         if (moveDirection.lengthSquared() > 0) {
@@ -109,16 +114,26 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         
         // Handle mouse aiming and shooting
         if (firing) {
+            // Get mouse position in screen coordinates
             Vector2f mousePos = app.getInputManager().getCursorPosition();
             Vector3f playerPos = player.getPosition();
             
-            // Calculate aim direction from player to mouse cursor (simplified)
-            // For now, just shoot in random directions for testing
+            // Calculate world position of mouse cursor
+            // Screen center corresponds to player position
+            float screenCenterX = app.getCamera().getWidth() / 2f;
+            float screenCenterY = app.getCamera().getHeight() / 2f;
+            
+            // Calculate offset from screen center
+            float offsetX = mousePos.x - screenCenterX;
+            float offsetY = mousePos.y - screenCenterY;
+            
+            // Convert to world coordinates (adjust scale based on camera frustum)
+            float worldScale = 15f / app.getCamera().getHeight(); // Based on viewHeight
             Vector3f aimDirection = new Vector3f(
-                (float) Math.cos(System.currentTimeMillis() / 1000.0),
+                -offsetX * worldScale,
                 0,
-                (float) Math.sin(System.currentTimeMillis() / 1000.0)
-            );
+                offsetY * worldScale
+            ).normalizeLocal();
             
             combatManager.fireProjectile(playerPos, aimDirection, 10f);
         }
@@ -126,6 +141,9 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         // Update combat manager and enemies
         combatManager.update(tpf);
         combatManager.updateEnemies(tpf, player.getPosition());
+        
+        // Check if player is near exit
+        checkExitProximity();
         
         // Update camera to follow player
         Vector3f playerPos = player.getPosition();
@@ -174,10 +192,44 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
                 break;
             case "ExitDungeon":
                 if (isPressed) {
-                    // TODO: Implement proper dungeon exit
                     System.out.println("Exiting dungeon...");
+                    ((com.jmonkeyvibe.game.Main) app).exitDungeon();
                 }
                 break;
+        }
+    }
+    
+    private void createDungeonExit() {
+        // Create exit portal at dungeon entrance
+        dungeonExitPosition = new Vector3f(10, 0, 10);
+        
+        com.jme3.scene.shape.Quad exitQuad = new com.jme3.scene.shape.Quad(2, 2);
+        com.jme3.scene.Geometry exitGeom = new com.jme3.scene.Geometry("DungeonExit", exitQuad);
+        
+        com.jme3.material.Material mat = new com.jme3.material.Material(app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
+        mat.setColor("Color", new com.jme3.math.ColorRGBA(0.0f, 0.8f, 0.0f, 0.7f)); // Green exit portal
+        mat.getAdditionalRenderState().setBlendMode(com.jme3.material.RenderState.BlendMode.Alpha);
+        exitGeom.setMaterial(mat);
+        exitGeom.setQueueBucket(com.jme3.renderer.queue.RenderQueue.Bucket.Transparent);
+        
+        // Center and rotate for top-down view
+        exitGeom.setLocalTranslation(-1, 0, -1);
+        exitGeom.rotate(-com.jme3.math.FastMath.HALF_PI, 0, 0);
+        
+        com.jme3.scene.Node exitNode = new com.jme3.scene.Node("ExitPortalNode");
+        exitNode.attachChild(exitGeom);
+        exitNode.setLocalTranslation(dungeonExitPosition);
+        dungeonNode.attachChild(exitNode);
+        
+        System.out.println("Dungeon exit created at " + dungeonExitPosition);
+    }
+    
+    private void checkExitProximity() {
+        if (dungeonExitPosition != null) {
+            float distance = player.getPosition().distance(dungeonExitPosition);
+            if (distance < EXIT_DISTANCE) {
+                // Player is near exit - could add visual feedback
+            }
         }
     }
 }

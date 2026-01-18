@@ -43,9 +43,12 @@ public class ExplorationState extends BaseAppState implements ActionListener {
     private String lastNPCMessage = "";
     private boolean isTypingCustomResponse = false;
     private StringBuilder customResponseBuffer = new StringBuilder();
+    private List<Vector3f> dungeonPortals = new ArrayList<>();
+    private com.jme3.font.BitmapText controlsTooltip;
     
     private static final float MOVE_SPEED = 5.0f;
     private static final float INTERACTION_DISTANCE = 3.0f;
+    private static final float PORTAL_DISTANCE = 2.0f;
 
     @Override
     protected void initialize(Application app) {
@@ -72,6 +75,14 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         createTestNPC(new Vector3f(5, 0, -5), "Village Elder");
         createTestNPC(new Vector3f(-5, 0, -5), "Mysterious Stranger");
         System.out.println("NPCs created");
+        
+        // Create dungeon portals
+        createDungeonPortal(new Vector3f(10, 0, 0));
+        createDungeonPortal(new Vector3f(-10, 0, 5));
+        System.out.println("Dungeon portals created");
+        
+        // Create controls tooltip UI
+        createControlsTooltip();
         
         this.app.getRootNode().attachChild(worldNode);
         System.out.println("World attached to root node. Total children: " + this.app.getRootNode().getChildren().size());
@@ -119,6 +130,9 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         Vector3f playerPos = player.getPosition();
         app.getCamera().setLocation(new Vector3f(playerPos.x, 100, playerPos.z));
         app.getCamera().lookAt(new Vector3f(playerPos.x, 0, playerPos.z), Vector3f.UNIT_Z);
+        
+        // Check for nearby dungeon portals
+        updatePortalProximity();
     }
 
     private void setupInput() {
@@ -132,10 +146,11 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         app.getInputManager().addMapping("Choice3", new KeyTrigger(KeyInput.KEY_3));
         app.getInputManager().addMapping("TypeCustom", new KeyTrigger(KeyInput.KEY_T));
         app.getInputManager().addMapping("Escape", new KeyTrigger(KeyInput.KEY_ESCAPE));
+        app.getInputManager().addMapping("EnterDungeon", new KeyTrigger(KeyInput.KEY_F));
         
         app.getInputManager().addListener(this, 
             "MoveForward", "MoveBackward", "MoveLeft", "MoveRight", "Interact",
-            "Choice1", "Choice2", "Choice3", "TypeCustom", "Escape");
+            "Choice1", "Choice2", "Choice3", "TypeCustom", "Escape", "EnterDungeon");
         
         // Add raw input listener for text typing
         app.getInputManager().addRawInputListener(new com.jme3.input.RawInputListener() {
@@ -221,6 +236,11 @@ public class ExplorationState extends BaseAppState implements ActionListener {
                     } else if (dialogUI.isVisible()) {
                         closeDialog();
                     }
+                }
+                break;
+            case "EnterDungeon":
+                if (isPressed) {
+                    checkDungeonEntrance();
                 }
                 break;
         }
@@ -434,4 +454,70 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         worldNode.attachChild(npc.getSpatial());
         npcs.add(npc);
     }
+    
+    private void createDungeonPortal(Vector3f position) {
+        // Create visual portal marker
+        Quad portalQuad = new Quad(2, 2);
+        Geometry portalGeom = new Geometry("DungeonPortal", portalQuad);
+        
+        Material mat = new Material(app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
+        mat.setColor("Color", new ColorRGBA(0.5f, 0.0f, 0.8f, 0.7f)); // Purple
+        mat.getAdditionalRenderState().setBlendMode(com.jme3.material.RenderState.BlendMode.Alpha);
+        portalGeom.setMaterial(mat);
+        portalGeom.setQueueBucket(com.jme3.renderer.queue.RenderQueue.Bucket.Transparent);
+        
+        // Center and rotate for top-down view
+        portalGeom.setLocalTranslation(-1, 0, -1);
+        portalGeom.rotate(-FastMath.HALF_PI, 0, 0);
+        
+        Node portalNode = new Node("PortalNode");
+        portalNode.attachChild(portalGeom);
+        portalNode.setLocalTranslation(position);
+        worldNode.attachChild(portalNode);
+        
+        dungeonPortals.add(position);
+    }
+    
+    private void createControlsTooltip() {
+        com.jme3.font.BitmapFont font = app.getAssetManager().loadFont("Interface/Fonts/Default.fnt");
+        controlsTooltip = new com.jme3.font.BitmapText(font);
+        controlsTooltip.setSize(font.getCharSet().getRenderedSize() * 0.8f);
+        controlsTooltip.setColor(ColorRGBA.White);
+        controlsTooltip.setText(
+            "EXPLORATION: WASD=Move | E=Talk to NPC | F=Enter Dungeon\n" +
+            "DIALOG: 1-3=Choose | T=Custom Response | ESC=Close\n" +
+            "COMBAT: WASD=Move | Mouse=Aim+Shoot | ESC=Exit Dungeon"
+        );
+        controlsTooltip.setLocalTranslation(10, app.getCamera().getHeight() - 10, 0);
+        app.getGuiNode().attachChild(controlsTooltip);
+    }
+    
+    private void updatePortalProximity() {
+        Vector3f playerPos = player.getPosition();
+        for (Vector3f portalPos : dungeonPortals) {
+            float distance = playerPos.distance(portalPos);
+            if (distance < PORTAL_DISTANCE) {
+                // Player is near a portal
+                return;
+            }
+        }
+    }
+    
+    private void checkDungeonEntrance() {
+        if (dialogUI.isVisible()) {
+            return; // Don't enter dungeon during dialog
+        }
+        
+        Vector3f playerPos = player.getPosition();
+        for (Vector3f portalPos : dungeonPortals) {
+            float distance = playerPos.distance(portalPos);
+            if (distance < PORTAL_DISTANCE) {
+                System.out.println("Entering dungeon...");
+                ((com.jmonkeyvibe.game.Main) app).enterDungeon();
+                return;
+            }
+        }
+        System.out.println("No dungeon portal nearby. Look for purple portals!");
+    }
 }
+
