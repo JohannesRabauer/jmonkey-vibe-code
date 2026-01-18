@@ -295,6 +295,15 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         if (selectedResponse != null && currentTalkingNPC != null) {
             System.out.println("Player: " + selectedResponse);
             
+            // Check if player is saying goodbye
+            String lowerResponse = selectedResponse.toLowerCase();
+            if (lowerResponse.contains("goodbye") || lowerResponse.contains("bye") || 
+                lowerResponse.contains("see you") || lowerResponse.contains("farewell") ||
+                lowerResponse.contains("leave") || lowerResponse.contains("must go")) {
+                closeDialog();
+                return;
+            }
+            
             // Clear current dialog and show loading
             List<String> loadingChoices = new ArrayList<>();
             loadingChoices.add("...");
@@ -350,6 +359,17 @@ public class ExplorationState extends BaseAppState implements ActionListener {
             String customResponse = customResponseBuffer.toString().trim();
             if (!customResponse.isEmpty() && currentTalkingNPC != null) {
                 System.out.println("Player: " + customResponse);
+                
+                // Check if player is saying goodbye
+                String lowerResponse = customResponse.toLowerCase();
+                if (lowerResponse.contains("goodbye") || lowerResponse.contains("bye") || 
+                    lowerResponse.contains("see you") || lowerResponse.contains("farewell") ||
+                    lowerResponse.contains("leave") || lowerResponse.contains("must go")) {
+                    isTypingCustomResponse = false;
+                    customResponseBuffer.setLength(0);
+                    closeDialog();
+                    return;
+                }
                 
                 // Clear input and hide it
                 isTypingCustomResponse = false;

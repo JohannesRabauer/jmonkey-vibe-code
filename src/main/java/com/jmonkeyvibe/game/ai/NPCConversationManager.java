@@ -219,7 +219,7 @@ public class NPCConversationManager {
                 "The NPC just said: \"%s\"\n\n" +
                 "Generate 3 short, distinct response options for the player (each 5-10 words max). " +
                 "Return them as a simple numbered list (1., 2., 3.) with no extra text. " +
-                "Make one friendly, one curious/questioning, and one to end/continue differently.",
+                "Make one friendly/agreeing, one curious/questioning, and one farewell/goodbye option (MUST contain 'farewell', 'goodbye', 'bye', 'leave', or 'must go').",
                 npc.getName(),
                 npcLastMessage
             );
@@ -242,7 +242,7 @@ public class NPCConversationManager {
             while (options.size() < 3) {
                 if (options.size() == 0) options.add("Tell me more");
                 else if (options.size() == 1) options.add("What can you help me with?");
-                else options.add("I must go now");
+                else options.add("Farewell for now");
             }
             
         } catch (Exception e) {
