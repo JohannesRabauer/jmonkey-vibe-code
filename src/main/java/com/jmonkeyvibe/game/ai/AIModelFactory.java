@@ -12,7 +12,7 @@ import java.time.Duration;
  */
 public class AIModelFactory {
     
-    private static final String AI_PROVIDER = System.getenv().getOrDefault("AI_PROVIDER", "OLLAMA");
+    private static final String AI_PROVIDER = System.getenv().getOrDefault("AI_PROVIDER", "OPENAI");
     private static final String OPENAI_API_KEY = System.getenv("OPENAI_API_KEY");
     private static final String OPENAI_BASE_URL = System.getenv("OPENAI_BASE_URL");
     private static final String OLLAMA_BASE_URL = System.getenv().getOrDefault("OLLAMA_BASE_URL", "http://localhost:11434");
