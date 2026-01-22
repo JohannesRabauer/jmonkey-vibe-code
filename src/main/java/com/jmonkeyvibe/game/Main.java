@@ -59,9 +59,10 @@ public class Main extends SimpleApplication {
         listener.setLocation(cam.getLocation());
         listener.setRotation(cam.getRotation());
 
-        // Initialize audio manager
+        // Initialize audio manager with rootNode so AudioNodes are in the scene graph
+        // CRITICAL: AudioNodes must be attached to the scene graph for jME audio to work!
         audioManager = AudioManager.getInstance();
-        audioManager.initialize(assetManager);
+        audioManager.initialize(assetManager, rootNode);
 
         // Initialize game states
         introStoryState = new IntroStoryState();

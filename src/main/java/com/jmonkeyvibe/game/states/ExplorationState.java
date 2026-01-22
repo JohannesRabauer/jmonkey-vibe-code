@@ -168,6 +168,9 @@ public class ExplorationState extends BaseAppState implements ActionListener {
 
         // Check for nearby dungeon portals
         updatePortalProximity();
+
+        // Auto-close dialog if player walked away from NPC
+        checkDialogDistance();
     }
 
     /**
@@ -571,6 +574,27 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         isTypingCustomResponse = false;
         customResponseBuffer.setLength(0);
         System.out.println("Dialog closed");
+    }
+
+    /**
+     * Check if player has walked too far from the NPC they're talking to
+     * and auto-close the dialog if so
+     */
+    private void checkDialogDistance() {
+        if (dialogUI.isVisible() && currentTalkingNPC != null) {
+            Vector3f playerPos = player.getPosition();
+            Vector3f npcPos = currentTalkingNPC.getPosition();
+            float distance = playerPos.distance(npcPos);
+
+            // Use a slightly larger distance than interaction distance for closing
+            // to avoid flickering when player is right at the boundary
+            float closeDistance = INTERACTION_DISTANCE * 1.5f;
+
+            if (distance > closeDistance) {
+                System.out.println("Player walked away from " + currentTalkingNPC.getName() + " - closing dialog");
+                closeDialog();
+            }
+        }
     }
 
     private void createTestNPC(Vector3f position, String name) {

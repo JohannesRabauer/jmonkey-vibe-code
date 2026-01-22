@@ -18,6 +18,7 @@ import com.jmonkeyvibe.game.combat.CombatManager;
 import com.jmonkeyvibe.game.input.GamepadManager;
 import com.jmonkeyvibe.game.ui.HealthBarUI;
 import com.jmonkeyvibe.game.ui.GameOverUI;
+import com.jmonkeyvibe.game.ui.LevelUpUI;
 import com.jmonkeyvibe.game.world.DungeonGenerator;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ import java.util.Random;
 /**
  * Game state for dungeon combat mode - twin-stick action combat
  */
-public class DungeonCombatState extends BaseAppState implements ActionListener {
+public class DungeonCombatState extends BaseAppState implements ActionListener, CombatManager.CombatListener {
 
     private SimpleApplication app;
     private Node dungeonNode;
@@ -35,7 +36,11 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
     private CombatManager combatManager;
     private HealthBarUI playerHealthBar;
     private GameOverUI gameOverUI;
+    private LevelUpUI levelUpUI;
     private DungeonGenerator dungeonGenerator;
+
+    // Leveling system
+    private boolean levelUpPending = false;
     
     private boolean moveForward = false;
     private boolean moveBackward = false;
@@ -75,15 +80,27 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         this.combatManager = new CombatManager(this.app.getAssetManager());
         this.random = new Random();
 
-        // Create player for combat
-        player = new Player(this.app.getAssetManager());
-        player.setPosition(new Vector3f(10, 0, 10));
-        dungeonNode.attachChild(player.getSpatial());
-        
-        // Generate procedural dungeon and store for collision detection
+        // Generate procedural dungeon first (before player spawn)
         dungeonGenerator = new DungeonGenerator(this.app.getAssetManager());
         dungeonGenerator.generateDungeon(dungeonNode, 40, 40);
-        
+
+        // Create player for combat
+        player = new Player(this.app.getAssetManager());
+
+        // Find a walkable spawn position for the player
+        Vector3f spawnPosition = findWalkableSpawnPosition(new Vector3f(10, 0, 10));
+        player.setPosition(spawnPosition);
+        dungeonNode.attachChild(player.getSpatial());
+
+        // Pass dungeon generator to combat manager for enemy collision detection
+        combatManager.setDungeonGenerator(dungeonGenerator);
+
+        // Set up combat listener for XP rewards
+        combatManager.setCombatListener(this);
+
+        // Update fire rate based on player stats
+        combatManager.setFireRate(player.getFireCooldown());
+
         // Attach combat manager node
         dungeonNode.attachChild(combatManager.getCombatNode());
 
@@ -105,6 +122,26 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
             public void onExitToOverworld() {
                 // Exit to overworld
                 ((com.jmonkeyvibe.game.Main) DungeonCombatState.this.app).exitDungeon();
+            }
+        });
+
+        // Create level up UI
+        levelUpUI = new LevelUpUI(this.app);
+        levelUpUI.setListener(new LevelUpUI.LevelUpListener() {
+            @Override
+            public void onStatSelected(int stat) {
+                // Level up completed, resume game
+                levelUpPending = false;
+
+                // Update combat manager with new stats
+                combatManager.setFireRate(player.getFireCooldown());
+
+                System.out.println("Level up complete! Resuming game...");
+                System.out.println("Player Level: " + player.getLevel());
+                System.out.println("Stats - STR: " + player.getStrength() +
+                    " AGI: " + player.getAgility() +
+                    " VIT: " + player.getVitality() +
+                    " DEX: " + player.getDexterity());
             }
         });
 
@@ -235,8 +272,8 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
     }
 
     /**
-     * Generate a random position for an enemy that doesn't overlap with existing positions
-     * and maintains minimum distance from player spawn
+     * Generate a random position for an enemy that doesn't overlap with existing positions,
+     * maintains minimum distance from player spawn, and is on a walkable tile
      */
     private Vector3f generateRandomEnemyPosition(Vector3f playerSpawn, List<Vector3f> usedPositions) {
         int maxAttempts = 50;
@@ -254,6 +291,11 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
             z = Math.max(2, Math.min(38, z));
 
             Vector3f candidatePos = new Vector3f(x, 0, z);
+
+            // Check if position is walkable (not a wall)
+            if (!dungeonGenerator.isWalkable(candidatePos.x, candidatePos.z)) {
+                continue; // Skip non-walkable positions
+            }
 
             // Check if position is far enough from all used positions
             boolean validPosition = true;
@@ -277,6 +319,57 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         return null; // Could not find valid position
     }
 
+    /**
+     * Find a walkable spawn position for the player.
+     * If the preferred position is walkable, return it.
+     * Otherwise, search in expanding squares around the preferred position.
+     */
+    private Vector3f findWalkableSpawnPosition(Vector3f preferredPosition) {
+        // Check if preferred position is walkable
+        if (dungeonGenerator.isWalkable(preferredPosition.x, preferredPosition.z)) {
+            return preferredPosition;
+        }
+
+        // Search in expanding squares around the preferred position
+        int maxSearchRadius = 20;
+        for (int radius = 1; radius <= maxSearchRadius; radius++) {
+            // Check all positions at this radius
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    // Only check positions on the edge of the square
+                    if (Math.abs(dx) == radius || Math.abs(dz) == radius) {
+                        float x = preferredPosition.x + dx;
+                        float z = preferredPosition.z + dz;
+
+                        if (dungeonGenerator.isWalkable(x, z)) {
+                            System.out.println("Player spawn adjusted from " + preferredPosition +
+                                " to walkable position (" + x + ", 0, " + z + ")");
+                            return new Vector3f(x, 0, z);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: scan the entire dungeon for any walkable tile
+        System.out.println("Warning: Could not find walkable position near preferred spawn. Scanning entire dungeon...");
+        int[][] grid = dungeonGenerator.getCollisionGrid();
+        if (grid != null) {
+            for (int x = 0; x < grid.length; x++) {
+                for (int z = 0; z < grid[0].length; z++) {
+                    if (grid[x][z] == 1) {
+                        System.out.println("Player spawn fallback to walkable position (" + x + ", 0, " + z + ")");
+                        return new Vector3f(x, 0, z);
+                    }
+                }
+            }
+        }
+
+        // Ultimate fallback (should never happen if dungeon has any rooms)
+        System.out.println("Warning: No walkable tiles found! Using preferred position anyway.");
+        return preferredPosition;
+    }
+
     @Override
     protected void cleanup(Application app) {
         this.app.getRootNode().detachChild(dungeonNode);
@@ -285,6 +378,9 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         }
         if (gameOverUI != null) {
             gameOverUI.cleanup();
+        }
+        if (levelUpUI != null) {
+            levelUpUI.cleanup();
         }
     }
 
@@ -305,6 +401,14 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         if (gameOver) {
             if (gameOverUI != null) {
                 gameOverUI.update();
+            }
+            return;
+        }
+
+        // If level up screen is showing, pause the game and only update the UI
+        if (levelUpPending) {
+            if (levelUpUI != null) {
+                levelUpUI.update();
             }
             return;
         }
@@ -340,7 +444,8 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
 
         if (moveDirection.lengthSquared() > 0) {
             moveDirection.normalizeLocal();
-            Vector3f movement = moveDirection.mult(MOVE_SPEED * tpf);
+            // Use player's move speed based on agility stat
+            Vector3f movement = moveDirection.mult(player.getMoveSpeed() * tpf);
             movePlayerWithCollision(movement);
         }
 
@@ -367,7 +472,8 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
                 offsetY * worldScale
             ).normalizeLocal();
 
-            combatManager.fireProjectile(playerPos, aimDirection, 10f);
+            // Use player's damage based on strength stat
+            combatManager.fireProjectile(playerPos, aimDirection, player.getBaseDamage());
         }
 
         // Update combat manager and enemies
@@ -440,8 +546,9 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         boolean gamepadFiring = gamepadManager.isRightTriggerPressed() || gamepadManager.isAButtonPressed();
         if (gamepadFiring && rightStick.lengthSquared() > 0) {
             // Fire in the direction of the right stick
+            // Use player's damage based on strength stat
             Vector3f playerPos = player.getPosition();
-            combatManager.fireProjectile(playerPos, gamepadAimDirection, 10f);
+            combatManager.fireProjectile(playerPos, gamepadAimDirection, player.getBaseDamage());
         }
 
         // Start button for exiting dungeon (ESC equivalent)
@@ -514,8 +621,8 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
     }
     
     private void createDungeonExit() {
-        // Create exit portal at dungeon entrance
-        dungeonExitPosition = new Vector3f(10, 0, 10);
+        // Create exit portal at player spawn position
+        dungeonExitPosition = player.getPosition().clone();
         
         com.jme3.scene.shape.Quad exitQuad = new com.jme3.scene.shape.Quad(2, 2);
         com.jme3.scene.Geometry exitGeom = new com.jme3.scene.Geometry("DungeonExit", exitQuad);
@@ -544,6 +651,42 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
             if (distance < EXIT_DISTANCE) {
                 // Player is near exit - could add visual feedback
             }
+        }
+    }
+
+    // CombatListener implementation
+    @Override
+    public void onEnemyKilled(Enemy.EnemyType enemyType, int experienceAwarded) {
+        // Award XP to player
+        boolean shouldLevelUp = player.addExperience(experienceAwarded);
+
+        if (shouldLevelUp && !levelUpPending) {
+            // Trigger level up
+            triggerLevelUp();
+        }
+    }
+
+    /**
+     * Trigger the level up UI
+     */
+    private void triggerLevelUp() {
+        levelUpPending = true;
+
+        // Clear movement input so player stops
+        moveForward = false;
+        moveBackward = false;
+        moveLeft = false;
+        moveRight = false;
+        firing = false;
+
+        System.out.println("========================================");
+        System.out.println("           LEVEL UP!");
+        System.out.println("========================================");
+
+        // Show level up UI
+        if (levelUpUI != null) {
+            levelUpUI.setGamepadManager(gamepadManager);
+            levelUpUI.show(player);
         }
     }
 

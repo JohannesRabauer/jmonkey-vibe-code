@@ -38,15 +38,21 @@ public class DialogUI {
     private int selectedChoice = 0;
     private StringBuilder currentDialogText = new StringBuilder();
     
-    private static final int DIALOG_WIDTH = 600;
-    private static final int DIALOG_HEIGHT = 200;
-    private static final int CHOICE_HEIGHT = 35;
-    private static final int PADDING = 15;
-    private static final int SPACING = 8;
-    private static final int MARGIN_TOP = 20;
-    private static final int INPUT_HEIGHT = 35;
-    private static final int NPC_NAME_HEIGHT = 25;
-    private static final int DIALOG_TEXT_TOP_OFFSET = 50;
+    private static final int DIALOG_WIDTH = 700;
+    private static final int DIALOG_HEIGHT = 220;
+    private static final int CHOICE_HEIGHT = 40;
+    private static final int PADDING = 20;
+    private static final int SPACING = 10;
+    private static final int MARGIN_TOP = 25;
+    private static final int INPUT_HEIGHT = 40;
+    private static final int NPC_NAME_HEIGHT = 30;
+    private static final int DIALOG_TEXT_TOP_OFFSET = 55;
+
+    // Font size multipliers for better readability
+    private static final float NPC_NAME_SIZE_MULT = 1.4f;
+    private static final float DIALOG_TEXT_SIZE_MULT = 1.15f;
+    private static final float CHOICE_TEXT_SIZE_MULT = 1.1f;
+    private static final float PROMPT_TEXT_SIZE_MULT = 0.95f;
     
     public DialogUI(SimpleApplication app) {
         this.app = app;
@@ -69,31 +75,31 @@ public class DialogUI {
         int dialogX = (screenWidth - DIALOG_WIDTH) / 2;
         int dialogY = screenHeight - MARGIN_TOP - DIALOG_HEIGHT;
         
-        // Dialog background
+        // Dialog background - darker for better contrast
         Quad dialogQuad = new Quad(DIALOG_WIDTH, DIALOG_HEIGHT);
         dialogBackground = new Geometry("DialogBackground", dialogQuad);
         Material dialogMat = new Material(app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
-        dialogMat.setColor("Color", new ColorRGBA(0.1f, 0.1f, 0.15f, 0.9f));
+        dialogMat.setColor("Color", new ColorRGBA(0.05f, 0.05f, 0.1f, 0.95f));
         dialogMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
         dialogBackground.setMaterial(dialogMat);
         dialogBackground.setLocalTranslation(dialogX, dialogY, 0);
-        
-        // NPC name - positioned at top of dialog box
+
+        // NPC name - positioned at top of dialog box with larger font
         npcNameText = new BitmapText(font);
-        float npcNameSize = font.getCharSet().getRenderedSize() * 1.2f;
+        float npcNameSize = font.getCharSet().getRenderedSize() * NPC_NAME_SIZE_MULT;
         npcNameText.setSize(npcNameSize);
-        npcNameText.setColor(ColorRGBA.Yellow);
+        npcNameText.setColor(new ColorRGBA(1.0f, 0.9f, 0.3f, 1.0f)); // Brighter yellow
         npcNameText.setLocalTranslation(
             dialogX + PADDING,
             dialogY + DIALOG_HEIGHT - PADDING,
             1
         );
 
-        // Dialog text - below NPC name with proper spacing
+        // Dialog text - below NPC name with proper spacing and larger font
         dialogText = new BitmapText(font);
-        float dialogTextSize = font.getCharSet().getRenderedSize();
+        float dialogTextSize = font.getCharSet().getRenderedSize() * DIALOG_TEXT_SIZE_MULT;
         dialogText.setSize(dialogTextSize);
-        dialogText.setColor(ColorRGBA.White);
+        dialogText.setColor(new ColorRGBA(1.0f, 1.0f, 1.0f, 1.0f)); // Pure white for best contrast
         int dialogTextY = dialogY + DIALOG_HEIGHT - DIALOG_TEXT_TOP_OFFSET;
         int dialogTextHeight = DIALOG_HEIGHT - DIALOG_TEXT_TOP_OFFSET - PADDING;
         dialogText.setLocalTranslation(
@@ -104,36 +110,36 @@ public class DialogUI {
         dialogText.setBox(new com.jme3.font.Rectangle(0, 0, DIALOG_WIDTH - 2 * PADDING, dialogTextHeight));
         dialogText.setLineWrapMode(com.jme3.font.LineWrapMode.Word);
         
-        // Prompt text - below dialog box
-        float promptSize = font.getCharSet().getRenderedSize() * 0.9f;
+        // Prompt text - below dialog box with slightly larger font
+        float promptSize = font.getCharSet().getRenderedSize() * PROMPT_TEXT_SIZE_MULT;
         int promptY = dialogY - SPACING;
         promptText = new BitmapText(font);
         promptText.setSize(promptSize);
-        promptText.setColor(ColorRGBA.LightGray);
+        promptText.setColor(new ColorRGBA(0.8f, 0.8f, 0.9f, 1.0f)); // Brighter for readability
         promptText.setText("Keys 1-3 or DPad+A to select | T or Y to type | ESC or B to close");
         promptText.setLocalTranslation(dialogX + PADDING, promptY, 1);
 
-        // Choices - below prompt with proper spacing
-        float choiceTextSize = font.getCharSet().getRenderedSize();
+        // Choices - below prompt with proper spacing and larger font
+        float choiceTextSize = font.getCharSet().getRenderedSize() * CHOICE_TEXT_SIZE_MULT;
         int choicesStartY = promptY - (int)promptSize - SPACING;
         for (int i = 0; i < 3; i++) {
             int choiceY = choicesStartY - (i * (CHOICE_HEIGHT + SPACING));
 
-            // Choice background - same width as dialog box
+            // Choice background - darker for better contrast
             Quad choiceQuad = new Quad(DIALOG_WIDTH, CHOICE_HEIGHT);
             Geometry choiceBg = new Geometry("ChoiceBg" + i, choiceQuad);
             Material choiceMat = new Material(app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
-            choiceMat.setColor("Color", new ColorRGBA(0.2f, 0.2f, 0.3f, 0.8f));
+            choiceMat.setColor("Color", new ColorRGBA(0.1f, 0.1f, 0.2f, 0.9f));
             choiceMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
             choiceBg.setMaterial(choiceMat);
             choiceBg.setLocalTranslation(dialogX, choiceY, 0);
             choiceBackgrounds.add(choiceBg);
 
-            // Choice text - vertically centered in the box
+            // Choice text - vertically centered in the box with larger font
             // BitmapText renders from baseline, so position at box bottom + offset to center
             BitmapText choiceText = new BitmapText(font);
             choiceText.setSize(choiceTextSize);
-            choiceText.setColor(ColorRGBA.White);
+            choiceText.setColor(new ColorRGBA(1.0f, 1.0f, 1.0f, 1.0f)); // Pure white
             int textVerticalOffset = (int)((CHOICE_HEIGHT + choiceTextSize) / 2);
             choiceText.setLocalTranslation(
                 dialogX + PADDING,
@@ -149,20 +155,20 @@ public class DialogUI {
         int lastChoiceY = choicesStartY - (2 * (CHOICE_HEIGHT + SPACING));
         int inputY = lastChoiceY - SPACING - INPUT_HEIGHT;
 
-        // Custom input background - same width as dialog box
+        // Custom input background - darker green for better contrast
         Quad inputQuad = new Quad(DIALOG_WIDTH, INPUT_HEIGHT);
         customInputBackground = new Geometry("CustomInputBg", inputQuad);
         Material inputMat = new Material(app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
-        inputMat.setColor("Color", new ColorRGBA(0.1f, 0.3f, 0.1f, 0.9f));
+        inputMat.setColor("Color", new ColorRGBA(0.05f, 0.2f, 0.05f, 0.95f));
         inputMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
         customInputBackground.setMaterial(inputMat);
         customInputBackground.setLocalTranslation(dialogX, inputY, 0);
 
-        // Custom input text - vertically centered in the box
-        float inputTextSize = font.getCharSet().getRenderedSize();
+        // Custom input text - vertically centered in the box with larger font
+        float inputTextSize = font.getCharSet().getRenderedSize() * CHOICE_TEXT_SIZE_MULT;
         customInputText = new BitmapText(font);
         customInputText.setSize(inputTextSize);
-        customInputText.setColor(ColorRGBA.White);
+        customInputText.setColor(new ColorRGBA(0.8f, 1.0f, 0.8f, 1.0f)); // Light green for input
         customInputText.setText("> ");
         int inputTextVerticalOffset = (int)((INPUT_HEIGHT + inputTextSize) / 2);
         customInputText.setLocalTranslation(
@@ -285,6 +291,20 @@ public class DialogUI {
             guiNode.detachChild(dialogNode);
             isVisible = false;
         }
+        // Always reset typing state when hiding, even if already hidden
+        isTypingCustomInput = false;
+        // Reset custom input visibility state
+        customInputBackground.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
+        customInputText.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
+        // Show choices again (reset to default state)
+        for (Geometry bg : choiceBackgrounds) {
+            bg.setCullHint(com.jme3.scene.Spatial.CullHint.Never);
+        }
+        for (BitmapText text : choiceTexts) {
+            text.setCullHint(com.jme3.scene.Spatial.CullHint.Never);
+        }
+        // Reset selection
+        selectedChoice = 0;
     }
     
     public boolean isVisible() {
@@ -333,14 +353,15 @@ public class DialogUI {
     private void updateChoiceHighlight() {
         for (int i = 0; i < choiceTexts.size(); i++) {
             if (i == selectedChoice && i < currentChoices.size()) {
-                choiceTexts.get(i).setColor(ColorRGBA.Yellow);
-                // Update background color
+                // Selected choice - bright yellow text on golden background
+                choiceTexts.get(i).setColor(new ColorRGBA(1.0f, 1.0f, 0.3f, 1.0f));
                 Material mat = choiceBackgrounds.get(i).getMaterial();
-                mat.setColor("Color", new ColorRGBA(0.4f, 0.4f, 0.1f, 0.9f));
+                mat.setColor("Color", new ColorRGBA(0.3f, 0.3f, 0.05f, 0.95f));
             } else if (i < currentChoices.size()) {
-                choiceTexts.get(i).setColor(ColorRGBA.White);
+                // Unselected choice - white text on dark background
+                choiceTexts.get(i).setColor(new ColorRGBA(1.0f, 1.0f, 1.0f, 1.0f));
                 Material mat = choiceBackgrounds.get(i).getMaterial();
-                mat.setColor("Color", new ColorRGBA(0.2f, 0.2f, 0.3f, 0.8f));
+                mat.setColor("Color", new ColorRGBA(0.1f, 0.1f, 0.2f, 0.9f));
             }
         }
     }

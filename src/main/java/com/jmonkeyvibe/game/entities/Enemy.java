@@ -143,6 +143,20 @@ public class Enemy {
     }
 
     /**
+     * Update enemy with a specific position (used for collision-aware movement).
+     * This allows external collision checking before setting the position.
+     */
+    public void updateWithPosition(float tpf, Vector3f newPosition) {
+        position.set(newPosition);
+        spatial.setLocalTranslation(position);
+
+        // Update attack cooldown
+        if (attackCooldown > 0) {
+            attackCooldown -= tpf;
+        }
+    }
+
+    /**
      * Check if enemy can attack the player and return damage if so.
      * Returns damage dealt, or 0 if not attacking.
      */
@@ -198,29 +212,32 @@ public class Enemy {
      * Enemy types with different stats
      */
     public enum EnemyType {
-        GOBLIN(30f, 3f, 5f, 0.8f, ColorRGBA.Red),
-        SKELETON(50f, 2.5f, 8f, 1.0f, ColorRGBA.White),
-        ORC(80f, 2f, 12f, 1.2f, new ColorRGBA(0.4f, 0.6f, 0.2f, 1f)),
-        DEMON(120f, 3.5f, 15f, 1.5f, new ColorRGBA(0.6f, 0.1f, 0.1f, 1f));
-        
+        GOBLIN(30f, 3f, 5f, 0.8f, ColorRGBA.Red, 10),
+        SKELETON(50f, 2.5f, 8f, 1.0f, ColorRGBA.White, 15),
+        ORC(80f, 2f, 12f, 1.2f, new ColorRGBA(0.4f, 0.6f, 0.2f, 1f), 25),
+        DEMON(120f, 3.5f, 15f, 1.5f, new ColorRGBA(0.6f, 0.1f, 0.1f, 1f), 40);
+
         private final float health;
         private final float speed;
         private final float damage;
         private final float size;
         private final ColorRGBA color;
-        
-        EnemyType(float health, float speed, float damage, float size, ColorRGBA color) {
+        private final int experienceValue;
+
+        EnemyType(float health, float speed, float damage, float size, ColorRGBA color, int experienceValue) {
             this.health = health;
             this.speed = speed;
             this.damage = damage;
             this.size = size;
             this.color = color;
+            this.experienceValue = experienceValue;
         }
-        
+
         public float getHealth() { return health; }
         public float getSpeed() { return speed; }
         public float getDamage() { return damage; }
         public float getSize() { return size; }
         public ColorRGBA getColor() { return color; }
+        public int getExperienceValue() { return experienceValue; }
     }
 }
