@@ -58,6 +58,13 @@
             <version>${jme3.version}</version>
         </dependency>
 
+        <!-- jMonkeyEngine OGG Audio Support -->
+        <dependency>
+            <groupId>org.jmonkeyengine</groupId>
+            <artifactId>jme3-jogg</artifactId>
+            <version>${jme3.version}</version>
+        </dependency>
+
         <!-- Langchain4j Core -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
