@@ -16,23 +16,27 @@ import java.util.Random;
  * Procedural dungeon generator for combat areas
  */
 public class DungeonGenerator {
-    
+
     private AssetManager assetManager;
     private Random random;
-    
+
+    // Collision grid: 0 = wall (blocked), 1 = floor (walkable)
+    private int[][] collisionGrid;
+
     private static final int ROOM_MIN_SIZE = 4;
     private static final int ROOM_MAX_SIZE = 10;
     private static final int MAX_ROOMS = 15;
-    
+
     public DungeonGenerator(AssetManager assetManager) {
         this.assetManager = assetManager;
         this.random = new Random();
     }
-    
+
     /**
      * Generate a procedural dungeon layout
+     * @return the collision grid (0 = wall, 1 = floor)
      */
-    public void generateDungeon(Node dungeonNode, int width, int height) {
+    public int[][] generateDungeon(Node dungeonNode, int width, int height) {
         System.out.println("Generating dungeon: " + width + "x" + height);
         
         // Initialize dungeon grid (0 = wall, 1 = floor)
@@ -74,8 +78,45 @@ public class DungeonGenerator {
                 }
             }
         }
-        
+
+        // Store the collision grid for external access
+        this.collisionGrid = grid;
+
         System.out.println("Dungeon generated with " + rooms.size() + " rooms");
+
+        return grid;
+    }
+
+    /**
+     * Get the collision grid for this dungeon
+     * @return the collision grid (0 = wall, 1 = floor)
+     */
+    public int[][] getCollisionGrid() {
+        return collisionGrid;
+    }
+
+    /**
+     * Check if a position is walkable (not a wall)
+     * @param x world X coordinate
+     * @param z world Z coordinate
+     * @return true if the position is walkable
+     */
+    public boolean isWalkable(float x, float z) {
+        if (collisionGrid == null) {
+            return true; // No collision data available
+        }
+
+        // Convert world coordinates to grid coordinates
+        int gridX = Math.round(x);
+        int gridZ = Math.round(z);
+
+        // Check bounds
+        if (gridX < 0 || gridX >= collisionGrid.length ||
+            gridZ < 0 || gridZ >= collisionGrid[0].length) {
+            return false; // Out of bounds = wall
+        }
+
+        return collisionGrid[gridX][gridZ] == 1;
     }
     
     private Room createRandomRoom(int mapWidth, int mapHeight) {

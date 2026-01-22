@@ -24,6 +24,20 @@ public class NPC {
     private String personality; // Used for AI dialogue generation
     private NPCType npcType;
 
+    // Wandering behavior state
+    public enum MovementState {
+        IDLE,
+        WALKING
+    }
+
+    private MovementState movementState = MovementState.IDLE;
+    private Vector3f spawnPosition; // Original spawn point to stay near
+    private Vector3f wanderTarget; // Current target position when walking
+    private float stateTimer = 0f; // Time remaining in current state
+    private float wanderSpeed = 0.8f; // Slow walking speed
+    private float maxWanderRadius = 3.0f; // Maximum distance from spawn point
+    private Random wanderRandom = new Random();
+
     // Random name pools for NPC generation
     private static final String[] FIRST_NAMES = {
         "Aldric", "Bran", "Cedric", "Dorian", "Elara", "Fiona", "Gareth", "Helena",
@@ -163,6 +177,12 @@ public class NPC {
     public void setPosition(Vector3f position) {
         this.position.set(position);
         spatial.setLocalTranslation(position);
+        // If spawn position hasn't been set, this is the initial spawn
+        if (spawnPosition == null) {
+            spawnPosition = position.clone();
+            // Initialize with a random idle time so NPCs don't all move at once
+            stateTimer = 1.0f + wanderRandom.nextFloat() * 3.0f;
+        }
     }
     
     public Vector3f getPosition() {
@@ -191,5 +211,104 @@ public class NPC {
 
     public NPCType getNpcType() {
         return npcType;
+    }
+
+    /**
+     * Update NPC wandering behavior
+     * @param tpf Time per frame
+     */
+    public void update(float tpf) {
+        if (spawnPosition == null) {
+            return; // Not initialized yet
+        }
+
+        stateTimer -= tpf;
+
+        switch (movementState) {
+            case IDLE:
+                if (stateTimer <= 0) {
+                    // Start walking to a new random position
+                    startWandering();
+                }
+                break;
+
+            case WALKING:
+                if (stateTimer <= 0 || hasReachedTarget()) {
+                    // Stop walking, enter idle state
+                    startIdling();
+                } else {
+                    // Move toward target
+                    moveTowardTarget(tpf);
+                }
+                break;
+        }
+    }
+
+    /**
+     * Start idle state with random duration
+     */
+    private void startIdling() {
+        movementState = MovementState.IDLE;
+        // Idle for 2-5 seconds
+        stateTimer = 2.0f + wanderRandom.nextFloat() * 3.0f;
+    }
+
+    /**
+     * Start walking to a random nearby position
+     */
+    private void startWandering() {
+        movementState = MovementState.WALKING;
+        // Walk for 1-3 seconds
+        stateTimer = 1.0f + wanderRandom.nextFloat() * 2.0f;
+
+        // Pick a random target within wander radius of spawn point
+        float angle = wanderRandom.nextFloat() * FastMath.TWO_PI;
+        float distance = wanderRandom.nextFloat() * maxWanderRadius;
+        float targetX = spawnPosition.x + FastMath.cos(angle) * distance;
+        float targetZ = spawnPosition.z + FastMath.sin(angle) * distance;
+        wanderTarget = new Vector3f(targetX, 0, targetZ);
+    }
+
+    /**
+     * Check if NPC has reached its wander target
+     */
+    private boolean hasReachedTarget() {
+        if (wanderTarget == null) {
+            return true;
+        }
+        return position.distance(wanderTarget) < 0.2f;
+    }
+
+    /**
+     * Move NPC toward its current wander target
+     */
+    private void moveTowardTarget(float tpf) {
+        if (wanderTarget == null) {
+            return;
+        }
+
+        Vector3f direction = wanderTarget.subtract(position);
+        direction.y = 0; // Keep on ground plane
+
+        if (direction.lengthSquared() > 0.01f) {
+            direction.normalizeLocal();
+            Vector3f movement = direction.mult(wanderSpeed * tpf);
+            position.addLocal(movement);
+            spatial.setLocalTranslation(position);
+        }
+    }
+
+    /**
+     * Get current movement state
+     */
+    public MovementState getMovementState() {
+        return movementState;
+    }
+
+    /**
+     * Check if NPC is currently moving
+     */
+    public boolean isMoving() {
+        return movementState == MovementState.WALKING;
     }
 }

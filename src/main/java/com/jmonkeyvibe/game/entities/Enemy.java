@@ -26,6 +26,14 @@ public class Enemy {
     private float attackCooldown;
     private static final float ATTACK_COOLDOWN_TIME = 1.0f; // 1 second between attacks
     private static final float ATTACK_RANGE = 1.5f; // Distance at which enemy can attack
+
+    // Health bar components
+    private Node healthBarNode;
+    private Geometry healthBarBackground;
+    private Geometry healthBarFill;
+    private float healthBarWidth;
+    private static final float HEALTH_BAR_HEIGHT = 0.1f;
+    private static final float HEALTH_BAR_Y_OFFSET = 0.3f; // Height above the enemy
     
     public Enemy(AssetManager assetManager, EnemyType type, Vector3f position) {
         this.type = type;
@@ -57,6 +65,69 @@ public class Enemy {
         
         spatial.attachChild(enemyGeom);
         spatial.setLocalTranslation(position);
+
+        // Create health bar above enemy
+        createHealthBar(assetManager);
+    }
+
+    private void createHealthBar(AssetManager assetManager) {
+        healthBarNode = new Node("HealthBar");
+        healthBarWidth = type.getSize() * 0.8f;
+
+        // Background (red - shows damage)
+        Quad bgQuad = new Quad(healthBarWidth, HEALTH_BAR_HEIGHT);
+        healthBarBackground = new Geometry("HealthBarBg", bgQuad);
+        Material bgMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        bgMat.setColor("Color", new ColorRGBA(0.5f, 0.0f, 0.0f, 0.9f));
+        bgMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
+        healthBarBackground.setMaterial(bgMat);
+        healthBarBackground.setQueueBucket(com.jme3.renderer.queue.RenderQueue.Bucket.Transparent);
+
+        // Fill (green - current health)
+        Quad fillQuad = new Quad(healthBarWidth, HEALTH_BAR_HEIGHT);
+        healthBarFill = new Geometry("HealthBarFill", fillQuad);
+        Material fillMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        fillMat.setColor("Color", new ColorRGBA(0.0f, 0.8f, 0.0f, 1.0f));
+        fillMat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
+        healthBarFill.setMaterial(fillMat);
+        healthBarFill.setQueueBucket(com.jme3.renderer.queue.RenderQueue.Bucket.Transparent);
+
+        // Center the health bar above the enemy
+        float xOffset = -healthBarWidth / 2;
+        healthBarBackground.setLocalTranslation(xOffset, 0, 0);
+        healthBarFill.setLocalTranslation(xOffset, 0, 0.01f); // Slightly in front
+
+        // Rotate to face camera (billboard effect for top-down view)
+        healthBarBackground.rotate(-FastMath.HALF_PI, 0, 0);
+        healthBarFill.rotate(-FastMath.HALF_PI, 0, 0);
+
+        healthBarNode.attachChild(healthBarBackground);
+        healthBarNode.attachChild(healthBarFill);
+
+        // Position health bar above the enemy
+        healthBarNode.setLocalTranslation(0, HEALTH_BAR_Y_OFFSET, 0);
+
+        spatial.attachChild(healthBarNode);
+    }
+
+    private void updateHealthBar() {
+        float healthPercent = Math.max(0, health / maxHealth);
+
+        // Update the fill bar width
+        float newWidth = healthBarWidth * healthPercent;
+        Quad fillQuad = new Quad(Math.max(0.01f, newWidth), HEALTH_BAR_HEIGHT);
+        healthBarFill.setMesh(fillQuad);
+
+        // Update color based on health percentage
+        ColorRGBA healthColor;
+        if (healthPercent > 0.6f) {
+            healthColor = new ColorRGBA(0.0f, 0.8f, 0.0f, 1.0f); // Green
+        } else if (healthPercent > 0.3f) {
+            healthColor = new ColorRGBA(0.8f, 0.8f, 0.0f, 1.0f); // Yellow
+        } else {
+            healthColor = new ColorRGBA(0.8f, 0.0f, 0.0f, 1.0f); // Red
+        }
+        healthBarFill.getMaterial().setColor("Color", healthColor);
     }
     
     public void update(float tpf, Vector3f playerPosition) {
@@ -92,6 +163,7 @@ public class Enemy {
     
     public void takeDamage(float damage) {
         health = Math.max(0, health - damage);
+        updateHealthBar();
     }
     
     public boolean isAlive() {
@@ -112,6 +184,14 @@ public class Enemy {
     
     public EnemyType getType() {
         return type;
+    }
+
+    public float getHealth() {
+        return health;
+    }
+
+    public float getMaxHealth() {
+        return maxHealth;
     }
     
     /**

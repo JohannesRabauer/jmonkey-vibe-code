@@ -9,6 +9,7 @@ import com.jme3.input.controls.KeyTrigger;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.FastMath;
+import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
@@ -17,7 +18,9 @@ import com.jmonkeyvibe.game.world.WorldGenerator;
 import com.jmonkeyvibe.game.entities.Player;
 import com.jmonkeyvibe.game.entities.NPC;
 import com.jmonkeyvibe.game.ai.NPCConversationManager;
+import com.jmonkeyvibe.game.audio.AudioManager;
 import com.jmonkeyvibe.game.ui.DialogUI;
+import com.jmonkeyvibe.game.input.GamepadManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -39,7 +42,11 @@ public class ExplorationState extends BaseAppState implements ActionListener {
     private boolean moveBackward = false;
     private boolean moveLeft = false;
     private boolean moveRight = false;
-    
+
+    // Gamepad support
+    private GamepadManager gamepadManager;
+    private int selectedDialogChoice = 0;
+
     private NPC currentTalkingNPC = null;
     private String lastNPCMessage = "";
     private boolean isTypingCustomResponse = false;
@@ -106,6 +113,8 @@ public class ExplorationState extends BaseAppState implements ActionListener {
     @Override
     protected void onEnable() {
         setupInput();
+        // Start exploration background music
+        AudioManager.getInstance().playExplorationMusic();
     }
 
     @Override
@@ -115,9 +124,12 @@ public class ExplorationState extends BaseAppState implements ActionListener {
 
     @Override
     public void update(float tpf) {
+        // Handle gamepad input
+        handleGamepadInput(tpf);
+
         // Update player movement
         Vector3f moveDirection = new Vector3f();
-        
+
         if (moveForward) {
             moveDirection.addLocal(0, 0, 1);  // W = up (positive Z)
         }
@@ -130,19 +142,113 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         if (moveRight) {
             moveDirection.addLocal(-1, 0, 0);  // D = right (negative X)
         }
-        
+
+        // Add gamepad left stick movement
+        if (gamepadManager != null) {
+            Vector2f leftStick = gamepadManager.getLeftStick();
+            if (leftStick.lengthSquared() > 0) {
+                // Left stick: X is left-right, Y is up-down
+                // In our coordinate system: positive X is left, positive Z is forward
+                moveDirection.addLocal(-leftStick.x, 0, leftStick.y);
+            }
+        }
+
         if (moveDirection.lengthSquared() > 0) {
             moveDirection.normalizeLocal();
             player.move(moveDirection.mult(MOVE_SPEED * tpf));
         }
-        
+
         // Update camera to follow player (keep it high above)
         Vector3f playerPos = player.getPosition();
         app.getCamera().setLocation(new Vector3f(playerPos.x, 100, playerPos.z));
         app.getCamera().lookAt(new Vector3f(playerPos.x, 0, playerPos.z), Vector3f.UNIT_Z);
-        
+
+        // Update NPC wandering behavior
+        updateNPCs(tpf);
+
         // Check for nearby dungeon portals
         updatePortalProximity();
+    }
+
+    /**
+     * Update all NPCs (wandering behavior)
+     */
+    private void updateNPCs(float tpf) {
+        for (NPC npc : npcs) {
+            npc.update(tpf);
+        }
+    }
+
+    /**
+     * Handle gamepad input for exploration mode
+     */
+    private void handleGamepadInput(float tpf) {
+        if (gamepadManager == null) {
+            return;
+        }
+
+        // Dialog-specific gamepad controls
+        if (dialogUI.isVisible() && !isTypingCustomResponse) {
+            // D-pad up/down to navigate choices
+            if (gamepadManager.isDpadUpJustPressed()) {
+                selectedDialogChoice = Math.max(0, selectedDialogChoice - 1);
+                dialogUI.highlightChoice(selectedDialogChoice);
+            }
+            if (gamepadManager.isDpadDownJustPressed()) {
+                int maxChoice = Math.min(2, dialogUI.getChoiceCount() - 1);
+                selectedDialogChoice = Math.min(maxChoice, selectedDialogChoice + 1);
+                dialogUI.highlightChoice(selectedDialogChoice);
+            }
+
+            // A button or right trigger to confirm dialog choice
+            if (gamepadManager.isAButtonJustPressed() || gamepadManager.isRightTriggerJustPressed()) {
+                selectDialogChoice(selectedDialogChoice);
+            }
+
+            // B button closes dialog
+            if (gamepadManager.isBButtonJustPressed()) {
+                closeDialog();
+            }
+
+            // Y button for custom response (T key equivalent)
+            if (gamepadManager.isYButtonJustPressed()) {
+                startCustomResponse();
+            }
+
+            // Start button also closes dialog
+            if (gamepadManager.isStartButtonJustPressed()) {
+                closeDialog();
+            }
+
+            return; // Don't process other gamepad inputs while in dialog
+        }
+
+        // Handle custom typing mode
+        if (isTypingCustomResponse) {
+            // Start or B button cancels custom response
+            if (gamepadManager.isStartButtonJustPressed() || gamepadManager.isBButtonJustPressed()) {
+                cancelCustomResponse();
+            }
+            return; // Don't process other inputs while typing
+        }
+
+        // Normal exploration controls (not in dialog)
+        // A button for interact (E key equivalent)
+        if (gamepadManager.isAButtonJustPressed()) {
+            checkNPCInteraction();
+        }
+
+        // X button for entering dungeon (F key equivalent)
+        if (gamepadManager.isXButtonJustPressed()) {
+            checkDungeonEntrance();
+        }
+    }
+
+    /**
+     * Set the gamepad manager for controller support
+     */
+    public void setGamepadManager(GamepadManager gamepadManager) {
+        this.gamepadManager = gamepadManager;
     }
 
     private void setupInput() {
@@ -279,7 +385,10 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         if (closestNPC != null) {
             final NPC npc = closestNPC;
             currentTalkingNPC = npc;
-            
+
+            // Reset selected dialog choice for gamepad navigation
+            selectedDialogChoice = 0;
+
             // Generate response options immediately
             List<String> choices = new ArrayList<>();
             choices.add("Tell me more...");
@@ -334,13 +443,16 @@ public class ExplorationState extends BaseAppState implements ActionListener {
                 return;
             }
             
+            // Reset selected dialog choice for gamepad navigation
+            selectedDialogChoice = 0;
+
             // Clear current dialog and show loading
             List<String> loadingChoices = new ArrayList<>();
             loadingChoices.add("...");
             loadingChoices.add("...");
             loadingChoices.add("...");
             dialogUI.startStreamingDialog(currentTalkingNPC.getName(), loadingChoices);
-            
+
             // Start streaming conversation
             conversationManager.startStreamingConversation(
                 currentTalkingNPC,
@@ -405,7 +517,10 @@ public class ExplorationState extends BaseAppState implements ActionListener {
                 isTypingCustomResponse = false;
                 customResponseBuffer.setLength(0);
                 dialogUI.setCustomInputVisible(false);
-                
+
+                // Reset selected dialog choice for gamepad navigation
+                selectedDialogChoice = 0;
+
                 // Start streaming response
                 List<String> loadingChoices = new ArrayList<>();
                 loadingChoices.add("...");
@@ -567,9 +682,9 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         controlsTooltip.setSize(font.getCharSet().getRenderedSize() * 0.8f);
         controlsTooltip.setColor(ColorRGBA.White);
         controlsTooltip.setText(
-            "EXPLORATION: WASD=Move | E=Talk to NPC | F=Enter Dungeon\n" +
-            "DIALOG: 1-3=Choose | T=Custom Response | ESC=Close\n" +
-            "COMBAT: WASD=Move | Mouse=Aim+Shoot | ESC=Exit Dungeon"
+            "KEYBOARD: WASD=Move | E=Talk | F=Dungeon | 1-3=Dialog | T=Type | ESC=Close\n" +
+            "GAMEPAD: LStick=Move | A=Talk/Select | X=Dungeon | DPad=Navigate | B=Close | Y=Type\n" +
+            "COMBAT: WASD/LStick=Move | Mouse/RStick=Aim | Click/RT=Shoot | ESC/Start=Exit"
         );
         controlsTooltip.setLocalTranslation(10, app.getCamera().getHeight() - 10, 0);
         app.getGuiNode().attachChild(controlsTooltip);

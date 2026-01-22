@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mvn compile:*)"
+      "Bash(mvn compile:*)",
+      "Bash(gradlew.bat compileJava:*)",
+      "Bash(cmd /c \"gradlew.bat compileJava\")",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(dir:*)",
+      "WebSearch",
+      "WebFetch(domain:kenney.nl)",
+      "WebFetch(domain:opengameart.org)",
+      "Bash(curl:*)",
+      "Bash(unzip:*)"
     ]
   }
 }

@@ -3,8 +3,11 @@ package com.jmonkeyvibe.game;
 import com.jme3.app.SimpleApplication;
 import com.jme3.math.Vector3f;
 import com.jme3.system.AppSettings;
+import com.jmonkeyvibe.game.audio.AudioManager;
+import com.jmonkeyvibe.game.input.GamepadManager;
 import com.jmonkeyvibe.game.states.ExplorationState;
 import com.jmonkeyvibe.game.states.DungeonCombatState;
+import com.jmonkeyvibe.game.states.IntroStoryState;
 
 /**
  * Main entry point for the JMonkey Vibe Game
@@ -12,8 +15,11 @@ import com.jmonkeyvibe.game.states.DungeonCombatState;
  */
 public class Main extends SimpleApplication {
     
+    private IntroStoryState introStoryState;
     private ExplorationState explorationState;
     private DungeonCombatState dungeonCombatState;
+    private GamepadManager gamepadManager;
+    private AudioManager audioManager;
 
     public static void main(String[] args) {
         Main app = new Main();
@@ -26,6 +32,7 @@ public class Main extends SimpleApplication {
         settings.setVSync(true);
         settings.setFrameRate(60);
         settings.setSamples(4); // Anti-aliasing
+        settings.setUseJoysticks(true); // Enable gamepad/controller support
         
         app.setSettings(settings);
         app.setShowSettings(false); // Skip settings dialog
@@ -36,22 +43,43 @@ public class Main extends SimpleApplication {
     public void simpleInitApp() {
         // Disable the default fly camera for 2D gameplay
         flyCam.setEnabled(false);
-        
+
         // Disable default ESC key mapping (which closes the app)
         inputManager.deleteMapping("SIMPLEAPP_Exit");
-        
+
         // Set up orthographic camera for 2D top-down view
         setupOrthographicCamera();
-        
+
+        // Initialize gamepad/controller support
+        gamepadManager = new GamepadManager();
+        gamepadManager.initialize(inputManager);
+
+        // Set up audio listener for jMonkeyEngine audio system
+        // The listener must be positioned where sounds should be "heard" from
+        listener.setLocation(cam.getLocation());
+        listener.setRotation(cam.getRotation());
+
+        // Initialize audio manager
+        audioManager = AudioManager.getInstance();
+        audioManager.initialize(assetManager);
+
         // Initialize game states
+        introStoryState = new IntroStoryState();
         explorationState = new ExplorationState();
         dungeonCombatState = new DungeonCombatState();
-        
-        // Start with exploration mode
-        stateManager.attach(explorationState);
-        
+
+        // Pass gamepad manager to states for controller support
+        introStoryState.setGamepadManager(gamepadManager);
+        explorationState.setGamepadManager(gamepadManager);
+        dungeonCombatState.setGamepadManager(gamepadManager);
+
+        // Start with intro story screen
+        stateManager.attach(introStoryState);
+
         System.out.println("JMonkey Vibe Game initialized!");
         System.out.println("AI Provider: " + System.getenv().getOrDefault("AI_PROVIDER", "OLLAMA (default)"));
+        System.out.println("Gamepad support enabled - connect a controller to use it!");
+        System.out.println("Audio system initialized - add audio files to src/main/resources/Sounds/");
     }
 
     /**
@@ -84,6 +112,20 @@ public class Main extends SimpleApplication {
     @Override
     public void simpleUpdate(float tpf) {
         // Game loop updates handled by AppStates
+
+        // Update audio listener position to match camera
+        // This ensures sounds are "heard" from the camera's position
+        listener.setLocation(cam.getLocation());
+        listener.setRotation(cam.getRotation());
+    }
+
+    /**
+     * Start the exploration mode (called from intro story)
+     */
+    public void startExploration() {
+        stateManager.attach(explorationState);
+        // Start exploration music
+        audioManager.playExplorationMusic();
     }
 
     /**
@@ -92,6 +134,8 @@ public class Main extends SimpleApplication {
     public void enterDungeon() {
         stateManager.detach(explorationState);
         stateManager.attach(dungeonCombatState);
+        // Switch to combat music
+        audioManager.playCombatMusic();
     }
 
     /**
@@ -100,5 +144,29 @@ public class Main extends SimpleApplication {
     public void exitDungeon() {
         stateManager.detach(dungeonCombatState);
         stateManager.attach(explorationState);
+        // Switch back to exploration music
+        audioManager.playExplorationMusic();
+    }
+
+    /**
+     * Restart the current dungeon (reset and re-enter)
+     */
+    public void restartDungeon() {
+        stateManager.detach(dungeonCombatState);
+        // Create a fresh dungeon state
+        dungeonCombatState = new DungeonCombatState();
+        dungeonCombatState.setGamepadManager(gamepadManager);
+        stateManager.attach(dungeonCombatState);
+        // Keep combat music playing
+        audioManager.playCombatMusic();
+    }
+
+    @Override
+    public void destroy() {
+        // Clean up audio resources
+        if (audioManager != null) {
+            audioManager.cleanup();
+        }
+        super.destroy();
     }
 }

@@ -110,7 +110,7 @@ public class DialogUI {
         promptText = new BitmapText(font);
         promptText.setSize(promptSize);
         promptText.setColor(ColorRGBA.LightGray);
-        promptText.setText("Press 1-3 to select response, or T to type custom response");
+        promptText.setText("Keys 1-3 or DPad+A to select | T or Y to type | ESC or B to close");
         promptText.setLocalTranslation(dialogX + PADDING, promptY, 1);
 
         // Choices - below prompt with proper spacing
@@ -301,6 +301,16 @@ public class DialogUI {
             updateChoiceHighlight();
         }
     }
+
+    /**
+     * Highlight a choice visually (for gamepad navigation)
+     */
+    public void highlightChoice(int index) {
+        if (index >= 0 && index < currentChoices.size()) {
+            selectedChoice = index;
+            updateChoiceHighlight();
+        }
+    }
     
     public String getSelectedChoice() {
         if (selectedChoice >= 0 && selectedChoice < currentChoices.size()) {
@@ -311,6 +321,13 @@ public class DialogUI {
     
     public int getSelectedChoiceIndex() {
         return selectedChoice;
+    }
+
+    /**
+     * Get the number of available choices in the current dialog
+     */
+    public int getChoiceCount() {
+        return currentChoices.size();
     }
     
     private void updateChoiceHighlight() {
@@ -333,7 +350,7 @@ public class DialogUI {
     }
     
     public void showChoicePrompt() {
-        promptText.setText("Press 1-3 to select response, or T to type custom response");
+        promptText.setText("Keys 1-3 or DPad+A to select | T or Y to type | ESC or B to close");
     }
     
     public String getCurrentDialogText() {

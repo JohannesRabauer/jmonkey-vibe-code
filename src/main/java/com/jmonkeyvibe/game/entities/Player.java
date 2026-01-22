@@ -70,6 +70,10 @@ public class Player {
     public float getHealth() {
         return health;
     }
+
+    public float getMaxHealth() {
+        return maxHealth;
+    }
     
     public void takeDamage(float damage) {
         health = Math.max(0, health - damage);
