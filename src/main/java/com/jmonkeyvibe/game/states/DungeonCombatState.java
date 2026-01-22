@@ -12,7 +12,12 @@ import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
 import com.jmonkeyvibe.game.entities.Player;
+import com.jmonkeyvibe.game.entities.Enemy;
 import com.jmonkeyvibe.game.combat.CombatManager;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 /**
  * Game state for dungeon combat mode - twin-stick action combat
@@ -34,12 +39,22 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
     private static final float MOVE_SPEED = 7.0f;
     private static final float EXIT_DISTANCE = 2.0f;
 
+    // Enemy spawning constants
+    private static final int MIN_ENEMIES = 3;
+    private static final int MAX_ENEMIES = 8;
+    private static final float MIN_ENEMY_SPAWN_DISTANCE = 8.0f;  // Minimum distance from player spawn
+    private static final float MAX_ENEMY_SPAWN_DISTANCE = 25.0f; // Maximum distance from player spawn
+    private static final float MIN_ENEMY_SEPARATION = 3.0f;      // Minimum distance between enemies
+
+    private Random random;
+
     @Override
     protected void initialize(Application app) {
         this.app = (SimpleApplication) app;
         this.dungeonNode = new Node("Dungeon");
         this.combatManager = new CombatManager(this.app.getAssetManager());
-        
+        this.random = new Random();
+
         // Create player for combat
         player = new Player(this.app.getAssetManager());
         player.setPosition(new Vector3f(10, 0, 10));
@@ -65,13 +80,82 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
     }
     
     private void spawnInitialEnemies() {
-        // Spawn enemies at various positions
-        combatManager.spawnEnemy(com.jmonkeyvibe.game.entities.Enemy.EnemyType.GOBLIN, 
-            new Vector3f(15, 0, 15));
-        combatManager.spawnEnemy(com.jmonkeyvibe.game.entities.Enemy.EnemyType.SKELETON, 
-            new Vector3f(20, 0, 10));
-        combatManager.spawnEnemy(com.jmonkeyvibe.game.entities.Enemy.EnemyType.GOBLIN, 
-            new Vector3f(12, 0, 18));
+        // Randomly determine number of enemies
+        int enemyCount = MIN_ENEMIES + random.nextInt(MAX_ENEMIES - MIN_ENEMIES + 1);
+        List<Vector3f> usedPositions = new ArrayList<>();
+        Vector3f playerSpawn = new Vector3f(10, 0, 10);
+
+        System.out.println("Spawning " + enemyCount + " random enemies...");
+
+        for (int i = 0; i < enemyCount; i++) {
+            Vector3f position = generateRandomEnemyPosition(playerSpawn, usedPositions);
+            if (position != null) {
+                usedPositions.add(position);
+                Enemy.EnemyType type = getRandomEnemyType();
+                combatManager.spawnEnemy(type, position);
+                System.out.println("  Spawned " + type + " at " + position);
+            }
+        }
+    }
+
+    /**
+     * Get a random enemy type with weighted probability
+     * Common enemies (Goblin, Skeleton) appear more often than rare ones (Orc, Demon)
+     */
+    private Enemy.EnemyType getRandomEnemyType() {
+        float roll = random.nextFloat();
+        if (roll < 0.4f) {
+            return Enemy.EnemyType.GOBLIN;     // 40% chance
+        } else if (roll < 0.7f) {
+            return Enemy.EnemyType.SKELETON;   // 30% chance
+        } else if (roll < 0.9f) {
+            return Enemy.EnemyType.ORC;        // 20% chance
+        } else {
+            return Enemy.EnemyType.DEMON;      // 10% chance
+        }
+    }
+
+    /**
+     * Generate a random position for an enemy that doesn't overlap with existing positions
+     * and maintains minimum distance from player spawn
+     */
+    private Vector3f generateRandomEnemyPosition(Vector3f playerSpawn, List<Vector3f> usedPositions) {
+        int maxAttempts = 50;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            // Generate random position within dungeon bounds
+            float angle = random.nextFloat() * com.jme3.math.FastMath.TWO_PI;
+            float distance = MIN_ENEMY_SPAWN_DISTANCE + random.nextFloat() * (MAX_ENEMY_SPAWN_DISTANCE - MIN_ENEMY_SPAWN_DISTANCE);
+
+            float x = playerSpawn.x + com.jme3.math.FastMath.cos(angle) * distance;
+            float z = playerSpawn.z + com.jme3.math.FastMath.sin(angle) * distance;
+
+            // Keep within reasonable dungeon bounds (0-40 based on dungeon size)
+            x = Math.max(2, Math.min(38, x));
+            z = Math.max(2, Math.min(38, z));
+
+            Vector3f candidatePos = new Vector3f(x, 0, z);
+
+            // Check if position is far enough from all used positions
+            boolean validPosition = true;
+            for (Vector3f usedPos : usedPositions) {
+                if (candidatePos.distance(usedPos) < MIN_ENEMY_SEPARATION) {
+                    validPosition = false;
+                    break;
+                }
+            }
+
+            // Also ensure minimum distance from player spawn
+            if (validPosition && candidatePos.distance(playerSpawn) < MIN_ENEMY_SPAWN_DISTANCE) {
+                validPosition = false;
+            }
+
+            if (validPosition) {
+                return candidatePos;
+            }
+        }
+
+        return null; // Could not find valid position
     }
 
     @Override
@@ -141,7 +225,16 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
         // Update combat manager and enemies
         combatManager.update(tpf);
         combatManager.updateEnemies(tpf, player.getPosition());
-        
+
+        // Process enemy attacks on player
+        combatManager.processEnemyAttacks(player);
+
+        // Check for player death
+        if (!player.isAlive()) {
+            handlePlayerDeath();
+            return;
+        }
+
         // Check if player is near exit
         checkExitProximity();
         
@@ -231,5 +324,11 @@ public class DungeonCombatState extends BaseAppState implements ActionListener {
                 // Player is near exit - could add visual feedback
             }
         }
+    }
+
+    private void handlePlayerDeath() {
+        System.out.println("Player died! Game Over!");
+        // Exit dungeon and return to main game
+        ((com.jmonkeyvibe.game.Main) app).exitDungeon();
     }
 }

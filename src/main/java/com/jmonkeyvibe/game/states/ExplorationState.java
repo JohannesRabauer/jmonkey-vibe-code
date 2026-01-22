@@ -20,6 +20,7 @@ import com.jmonkeyvibe.game.ai.NPCConversationManager;
 import com.jmonkeyvibe.game.ui.DialogUI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 /**
  * Game state for exploration mode - top-down overworld navigation
@@ -50,6 +51,16 @@ public class ExplorationState extends BaseAppState implements ActionListener {
     private static final float INTERACTION_DISTANCE = 3.0f;
     private static final float PORTAL_DISTANCE = 2.0f;
 
+    // Randomization constants
+    private static final int MIN_NPCS = 3;
+    private static final int MAX_NPCS = 7;
+    private static final int MIN_PORTALS = 2;
+    private static final int MAX_PORTALS = 4;
+    private static final float WORLD_SPAWN_RADIUS = 15.0f;
+    private static final float MIN_SPAWN_DISTANCE = 3.0f;
+
+    private Random random;
+
     @Override
     protected void initialize(Application app) {
         this.app = (SimpleApplication) app;
@@ -58,28 +69,27 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         this.npcs = new ArrayList<>();
         this.conversationManager = new NPCConversationManager();
         this.dialogUI = new DialogUI(this.app);
-        
+        this.random = new Random();
+
         System.out.println("Initializing exploration state...");
-        
+
         // Generate initial world
         worldGenerator.generateOverworld(worldNode, 20, 20);
         System.out.println("World generated with tiles");
-        
+
         // Create player
         player = new Player(this.app.getAssetManager());
         player.setPosition(new Vector3f(0, 0, 0));
         worldNode.attachChild(player.getSpatial());
         System.out.println("Player created at (0, 0, 0)");
-        
-        // Add some test NPCs
-        createTestNPC(new Vector3f(5, 0, -5), "Village Elder");
-        createTestNPC(new Vector3f(-5, 0, -5), "Mysterious Stranger");
-        System.out.println("NPCs created");
-        
-        // Create dungeon portals
-        createDungeonPortal(new Vector3f(10, 0, 0));
-        createDungeonPortal(new Vector3f(-10, 0, 5));
-        System.out.println("Dungeon portals created");
+
+        // Spawn random NPCs
+        spawnRandomNPCs();
+        System.out.println("NPCs created: " + npcs.size());
+
+        // Create random dungeon portals
+        spawnRandomPortals();
+        System.out.println("Dungeon portals created: " + dungeonPortals.size());
         
         // Create controls tooltip UI
         createControlsTooltip();
@@ -453,6 +463,79 @@ public class ExplorationState extends BaseAppState implements ActionListener {
         npc.setPosition(position);
         worldNode.attachChild(npc.getSpatial());
         npcs.add(npc);
+    }
+
+    /**
+     * Spawn a random number of NPCs at random positions in the world
+     */
+    private void spawnRandomNPCs() {
+        int npcCount = MIN_NPCS + random.nextInt(MAX_NPCS - MIN_NPCS + 1);
+        List<Vector3f> usedPositions = new ArrayList<>();
+
+        for (int i = 0; i < npcCount; i++) {
+            Vector3f position = generateRandomPosition(usedPositions);
+            if (position != null) {
+                usedPositions.add(position);
+                NPC npc = NPC.createRandomNPC(app.getAssetManager());
+                npc.setPosition(position);
+                worldNode.attachChild(npc.getSpatial());
+                npcs.add(npc);
+                System.out.println("  Spawned NPC: " + npc.getName() + " (" + npc.getNpcType() + ") at " + position);
+            }
+        }
+    }
+
+    /**
+     * Spawn random dungeon portals at random positions
+     */
+    private void spawnRandomPortals() {
+        int portalCount = MIN_PORTALS + random.nextInt(MAX_PORTALS - MIN_PORTALS + 1);
+        List<Vector3f> usedPositions = new ArrayList<>();
+
+        // Collect NPC positions to avoid spawning portals on them
+        for (NPC npc : npcs) {
+            usedPositions.add(npc.getPosition());
+        }
+
+        for (int i = 0; i < portalCount; i++) {
+            Vector3f position = generateRandomPosition(usedPositions);
+            if (position != null) {
+                usedPositions.add(position);
+                createDungeonPortal(position);
+                System.out.println("  Spawned dungeon portal at " + position);
+            }
+        }
+    }
+
+    /**
+     * Generate a random position that doesn't overlap with existing positions
+     */
+    private Vector3f generateRandomPosition(List<Vector3f> usedPositions) {
+        int maxAttempts = 50;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            // Generate random position within world bounds, avoiding center (player spawn)
+            float angle = random.nextFloat() * FastMath.TWO_PI;
+            float distance = MIN_SPAWN_DISTANCE + random.nextFloat() * (WORLD_SPAWN_RADIUS - MIN_SPAWN_DISTANCE);
+            float x = FastMath.cos(angle) * distance;
+            float z = FastMath.sin(angle) * distance;
+            Vector3f candidatePos = new Vector3f(x, 0, z);
+
+            // Check if position is far enough from all used positions
+            boolean validPosition = true;
+            for (Vector3f usedPos : usedPositions) {
+                if (candidatePos.distance(usedPos) < MIN_SPAWN_DISTANCE) {
+                    validPosition = false;
+                    break;
+                }
+            }
+
+            if (validPosition) {
+                return candidatePos;
+            }
+        }
+
+        return null; // Could not find valid position
     }
     
     private void createDungeonPortal(Vector3f position) {

@@ -4,6 +4,7 @@ import com.jme3.asset.AssetManager;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
 import com.jmonkeyvibe.game.entities.Enemy;
+import com.jmonkeyvibe.game.entities.Player;
 import com.jmonkeyvibe.game.entities.Projectile;
 
 import java.util.ArrayList;
@@ -70,6 +71,26 @@ public class CombatManager {
         for (Enemy enemy : enemies) {
             enemy.update(tpf, playerPosition);
         }
+    }
+
+    /**
+     * Process enemy attacks on the player.
+     * Returns total damage dealt to the player this frame.
+     */
+    public float processEnemyAttacks(Player player) {
+        float totalDamage = 0f;
+        Vector3f playerPosition = player.getPosition();
+
+        for (Enemy enemy : enemies) {
+            float damage = enemy.tryAttackPlayer(playerPosition);
+            if (damage > 0) {
+                player.takeDamage(damage);
+                totalDamage += damage;
+                System.out.println("Enemy " + enemy.getType().name() + " attacked player for " + damage + " damage! Player health: " + player.getHealth());
+            }
+        }
+
+        return totalDamage;
     }
     
     public void spawnEnemy(Enemy.EnemyType type, Vector3f position) {

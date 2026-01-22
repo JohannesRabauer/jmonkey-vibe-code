@@ -23,6 +23,9 @@ public class Enemy {
     private float speed;
     private float damage;
     private EnemyType type;
+    private float attackCooldown;
+    private static final float ATTACK_COOLDOWN_TIME = 1.0f; // 1 second between attacks
+    private static final float ATTACK_RANGE = 1.5f; // Distance at which enemy can attack
     
     public Enemy(AssetManager assetManager, EnemyType type, Vector3f position) {
         this.type = type;
@@ -61,6 +64,30 @@ public class Enemy {
         Vector3f direction = playerPosition.subtract(position).normalize();
         position.addLocal(direction.mult(speed * tpf));
         spatial.setLocalTranslation(position);
+
+        // Update attack cooldown
+        if (attackCooldown > 0) {
+            attackCooldown -= tpf;
+        }
+    }
+
+    /**
+     * Check if enemy can attack the player and return damage if so.
+     * Returns damage dealt, or 0 if not attacking.
+     */
+    public float tryAttackPlayer(Vector3f playerPosition) {
+        float distanceToPlayer = position.distance(playerPosition);
+
+        // Check if in range and off cooldown
+        if (distanceToPlayer <= ATTACK_RANGE && attackCooldown <= 0) {
+            attackCooldown = ATTACK_COOLDOWN_TIME;
+            return damage;
+        }
+        return 0f;
+    }
+
+    public float getAttackRange() {
+        return ATTACK_RANGE;
     }
     
     public void takeDamage(float damage) {
